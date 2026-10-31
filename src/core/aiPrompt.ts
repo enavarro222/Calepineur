@@ -38,6 +38,14 @@ const PARTIAL = `Modification partielle : pour une correction, donne un JSON san
 - Dans "designs", "key" désigne le motif, avec la même logique.
 - "obstacles" et "zone" remplacent la liste entière du mur.`;
 
+const CALIB = `Calage photo : tu ne peux pas transmettre mes photos, mais tu peux préparer leur calage. Ajoute au mur un champ "calib" avec 4 repères reconnaissables, non alignés :
+{ "walls": [{ "id": "mur-1", "calib": [{ "wx": 0, "wy": 0, "u": 0.12, "v": 0.8 }, { "wx": 240, "wy": 0, "u": 0.9, "v": 0.79 }, { "wx": 240, "wy": 75, "u": 0.88, "v": 0.3 }, { "wx": 0, "wy": 75, "u": 0.14, "v": 0.31 }] }] }
+- wx, wy : position réelle sur le mur, en cm.
+- u, v : position sur la photo d'origine, non recadrée, de 0 à 1 ; u depuis la gauche, v depuis le haut.
+Dis-moi quelle photo choisir pour chaque mur : je la charge dans Calepineur et le calage s'applique tout seul. Je l'ajusterai à la main si besoin.`;
+
+const CALIB_POINTER = `Calage photo : si tu as accès au web, lis ${GUIDE_URL} pour préparer le calage de mes photos.`;
+
 const LINK = `Lien : tu peux aussi donner la configuration, complète ou partielle, sous forme d'un lien à cliquer :
 ${APP_URL}#config=<JSON encodé>
 Encode le JSON comme encodeURIComponent, en encodant aussi les parenthèses (%28, %29) et l'apostrophe (%27). Exemple pour un carreau de 15 cm :
@@ -53,7 +61,8 @@ function promptProject(project: Project): Project {
   };
 }
 
-export function buildPrompt(project: Project | null): string {
+// compact : pour les liens préremplis, dont la longueur est limitée.
+export function buildPrompt(project: Project | null, compact = false): string {
   const start = project
     ? `Voici mon projet actuel, à modifier selon mes demandes :\n${JSON.stringify(promptProject(project))}\n\nDemande-moi ce que je veux changer.`
     : `Commence par me demander :
@@ -75,6 +84,8 @@ Après le bloc, liste les cotes que tu as estimées d'après les photos, pour qu
 
 ${PARTIAL}
 
+${compact ? CALIB_POINTER : CALIB}
+
 ${LINK}`;
 }
 
@@ -91,7 +102,7 @@ ${buildPrompt(null)}
 
 ## Limites
 
-- Tu ne peux pas transmettre d'image : l'utilisateur charge ses photos et ses motifs dans l'application.
+- Tu ne peux pas transmettre d'image : l'utilisateur charge ses photos et ses motifs dans l'application. Le champ "calib" prépare seulement le calage.
 - Les cotes déduites d'une photo sont des estimations. Dis-le toujours.
 `;
 }

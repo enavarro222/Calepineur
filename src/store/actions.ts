@@ -6,11 +6,12 @@ import { cm } from '../core/format';
 import { colLetters, round1 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import { optimizeGrid } from '../core/optimize';
-import { parseProjectFile, serializeProject } from '../core/project';
+import { calibPoints } from '../core/photo';
+import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
 import type { Project, Wall } from '../core/types';
-import { readImageFile } from '../lib/images';
+import { imageSize, readImageFile } from '../lib/images';
 import { removeUnusedImages, writeImage } from './persistence';
-import { commit, getComps, getProject, replaceProject, setUi, showToast, useStore } from './store';
+import { commit, getComps, getProject, mutate, replaceProject, setUi, showToast, useStore } from './store';
 
 export function shuffle(keepLocked: boolean): void {
   commit(p => {
@@ -129,21 +130,26 @@ export async function uploadPhoto(i: number, file: File): Promise<void> {
   try {
     const r = await readImageFile(file, 1800);
     const src = storeImage(r.url);
+    let prepared = false;
     commit(p => {
       const w = p.walls[i]!;
       const H = Math.min(w.H, 80);
+      prepared = !!w.calib;
       w.photo = {
         src, opacity: 1, blend: true,
-        pts: [
+        pts: w.calib ? calibPoints(w.calib, r.w, r.h) : [
           { wx: 0, wy: 0, px: r.w * .15, py: r.h * .75 },
           { wx: w.W, wy: 0, px: r.w * .85, py: r.h * .75 },
           { wx: w.W, wy: H, px: r.w * .85, py: r.h * .4 },
           { wx: 0, wy: H, px: r.w * .15, py: r.h * .4 },
         ],
       };
+      delete w.calib;
     });
     setUi({ view: { ...useStore.getState().ui.view, [i]: 'photo' }, tool: 'calib' });
-    showToast('Cale maintenant la photo : place les 4 pastilles jaunes sur les repères indiqués à gauche.', 6000);
+    showToast(prepared
+      ? 'Photo calée avec les repères de ton IA. Vérifie que le contour jaune tombe sur le mur.'
+      : 'Cale maintenant la photo : place les 4 pastilles jaunes sur les repères indiqués à gauche.', 6000);
   } catch (e) {
     fileError(e);
   }
@@ -179,10 +185,35 @@ export async function importFile(file: File): Promise<void> {
   }
 }
 
-export function applyConfig(next: Project): void {
+// Un calage reçu pour une photo déjà chargée s'applique dès que sa taille est connue.
+async function applyCalibToPhotos(): Promise<void> {
+  const { project, images } = useStore.getState();
+  for (const w of project.walls) {
+    const url = imageUrl(w.photo?.src, images);
+    if (!w.calib || !url) continue;
+    const { w: width, h } = await imageSize(url);
+    const pts = calibPoints(w.calib, width, h);
+    mutate(p => {
+      const wall = p.walls.find(x => x.id === w.id);
+      if (!wall?.photo) return;
+      wall.photo.pts = pts;
+      delete wall.calib;
+    });
+  }
+}
+
+export async function applyConfig(next: Project): Promise<void> {
   replaceProject(next);
   setUi({ tab: 'wall:0', aiOpen: false, pending: null });
-  showToast('Modifications appliquées. Vérifie les cotes au mètre.', 6000);
+  const waiting = getProject().walls.some(w => w.calib && !w.photo);
+  showToast(waiting
+    ? 'Modifications appliquées. Choisis la photo de chaque mur : le calage est prêt.'
+    : 'Modifications appliquées. Vérifie les cotes au mètre.', 6000);
+  try {
+    await applyCalibToPhotos();
+  } catch (e) {
+    fileError(e);
+  }
 }
 
 export async function copyText(text: string): Promise<boolean> {

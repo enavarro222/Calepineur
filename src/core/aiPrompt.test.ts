@@ -42,11 +42,24 @@ describe('liens', () => {
     expect(resolveConfig(base, json).walls[0]!.W).toBe(250);
   });
 
+  it('donne un exemple de calage valide', () => {
+    const json = /\{ "walls": \[\{ "id": "mur-1", "calib".*\}/.exec(buildPrompt(null))![0];
+    const base = project({ walls: [wall({ id: 'mur-1' })] });
+    expect(resolveConfig(base, json).walls[0]!.calib).toHaveLength(4);
+  });
+
+  it('renvoie vers le guide pour le calage dans les liens préremplis', () => {
+    const compact = buildPrompt(null, true);
+    expect(compact).toContain('llms.txt');
+    expect(compact).not.toContain('"calib"');
+  });
+
   it('explique tout dans le fichier pour les IA', () => {
     const guide = buildGuide();
     expect(guide).toContain('#config=');
     expect(guide).toContain('"version": 1');
     expect(guide).toContain('Modification partielle');
+    expect(guide).toContain('"calib"');
   });
 });
 
@@ -58,7 +71,7 @@ describe('aiTargets', () => {
   });
 
   it('garde la consigne de base assez courte pour un lien', () => {
-    expect(aiTargets(buildPrompt(null)).filter(t => t.prefilled)).toHaveLength(3);
+    expect(aiTargets(buildPrompt(null, true)).filter(t => t.prefilled)).toHaveLength(3);
   });
 
   it('renonce au préremplissage si le projet rend le lien trop long', () => {

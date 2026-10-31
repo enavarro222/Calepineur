@@ -109,6 +109,7 @@ export function WallSidebar({ i }: { i: number }) {
 
       <section>
         <h3>Photo</h3>
+        {wall.calib && !hasPhoto && <p className="calib-ready">Calage prêt : choisis la photo de ce mur, sans la recadrer.</p>}
         <div className="btns">
           <FileButton accept="image/*" onFile={f => void uploadPhoto(i, f)}>{hasPhoto ? 'Changer la photo…' : 'Choisir une photo…'}</FileButton>
           {hasPhoto && <button onClick={() => removePhoto(i)}>Retirer</button>}

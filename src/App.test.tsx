@@ -232,6 +232,23 @@ describe('lien de configuration', () => {
   });
 });
 
+describe('calage reçu sans photo', () => {
+  const calib = [
+    { wx: 0, wy: 0, u: 0.1, v: 0.8 }, { wx: 240, wy: 0, u: 0.9, v: 0.8 },
+    { wx: 240, wy: 75, u: 0.9, v: 0.2 }, { wx: 0, wy: 75, u: 0.1, v: 0.2 },
+  ];
+
+  it('indique que la photo est attendue', async () => {
+    const { user } = setup();
+    act(() => applyHash(`#config=${encodeURIComponent(JSON.stringify({ walls: [{ name: 'Mur fenêtre', calib }] }))}`));
+    await user.click(screen.getByRole('button', { name: 'Appliquer' }));
+    expect(screen.getByRole('status')).toHaveTextContent('le calage est prêt');
+    expect(screen.getByText('Calage prêt : choisis la photo de ce mur, sans la recadrer.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Photo' }));
+    expect(screen.getAllByText(/Calage prêt/)).toHaveLength(2);
+  });
+});
+
 describe('édition d\'un pan', () => {
   it('recalcule en changeant une dimension', async () => {
     const { user } = setup();

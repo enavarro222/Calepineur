@@ -1,5 +1,5 @@
 // Lecture et écriture du fichier projet. Le contenu importé est validé champ par champ.
-import type { BrushState, Design, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
+import type { BrushState, CalibHint, Design, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
 
 export type ImageStore = Record<string, string>;
 
@@ -90,6 +90,18 @@ function parsePhoto(v: unknown, what: string): WallPhoto | null {
   };
 }
 
+function parseCalib(v: unknown, what: string): CalibHint[] {
+  const pts = arr(v, what);
+  if (pts.length !== 4) fail(`${what} : 4 repères attendus`);
+  return pts.map((c, i) => {
+    const q = obj(c, `${what}[${i}]`);
+    const u = num(q.u, 'u');
+    const w = num(q.v, 'v');
+    if (u < 0 || u > 1 || w < 0 || w > 1) fail(`${what}[${i}] : u et v vont de 0 à 1`);
+    return { wx: num(q.wx, 'wx'), wy: num(q.wy, 'wy'), u, v: w };
+  });
+}
+
 function parseTiles(v: unknown, what: string): Record<string, TileOverride> {
   const out: Record<string, TileOverride> = {};
   for (const [k, raw] of Object.entries(obj(v ?? {}, what))) {
@@ -120,6 +132,7 @@ function parseWall(v: unknown, i: number): Wall {
     zone: arr(w.zone, `${what}.zone`).map(p => point(p, `${what}.zone`)),
     obstacles: arr(w.obstacles ?? [], `${what}.obstacles`).map((o, k) => parseObstacle(o, `${what}.obstacles[${k}]`)),
     photo: parsePhoto(w.photo, `${what}.photo`),
+    ...(w.calib != null ? { calib: parseCalib(w.calib, `${what}.calib`) } : {}),
     tiles: parseTiles(w.tiles, `${what}.tiles`),
   };
 }

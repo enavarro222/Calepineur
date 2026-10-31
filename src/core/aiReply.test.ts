@@ -154,6 +154,41 @@ describe('modification partielle', () => {
   });
 });
 
+describe('calage par lien', () => {
+  const calib = [
+    { wx: 0, wy: 0, u: 0.1, v: 0.8 }, { wx: 100, wy: 0, u: 0.9, v: 0.8 },
+    { wx: 100, wy: 60, u: 0.9, v: 0.2 }, { wx: 0, wy: 60, u: 0.1, v: 0.2 },
+  ];
+
+  it('prépare le calage d\'un mur', () => {
+    expect(patch({ walls: [{ id: 'w1', calib }] }).walls[0]!.calib).toEqual(calib);
+  });
+
+  it('le garde dans un projet complet', () => {
+    const full = project({ walls: [wall({ calib })] });
+    expect(resolveConfig(project(), JSON.stringify(full)).walls[0]!.calib).toEqual(calib);
+  });
+
+  it('survit à la sauvegarde', () => {
+    const p = project({ walls: [wall({ calib })] });
+    expect(parseProject(JSON.parse(JSON.stringify(p)))).toEqual(p);
+  });
+
+  it('l\'annonce dans les changements', () => {
+    expect(describeChanges(project(), patch({ walls: [{ id: 'w1', calib }] }))).toEqual(['Pan : calage photo proposé']);
+    const added = patch({ walls: [{ id: 'n', name: 'Neuf', W: 10, H: 10, calib }] });
+    expect(describeChanges(project(), added)).toEqual(['Nouveau pan : Neuf, 10 × 10 cm, 0 élément, calage photo proposé']);
+  });
+
+  it.each([
+    ['moins de 4 repères', calib.slice(0, 3), /4 repères/],
+    ['des pixels au lieu de proportions', calib.map(c => ({ ...c, u: 412 })), /de 0 à 1/],
+    ['des repères alignés', calib.map((c, i) => ({ ...c, wx: i, wy: 0, u: i / 10, v: 0 })), /alignés/],
+  ])('refuse %s', (_, bad, message) => {
+    expect(() => patch({ walls: [{ id: 'w1', calib: bad }] })).toThrow(message);
+  });
+});
+
 describe('describeChanges', () => {
   it('ne signale rien sans changement', () => {
     expect(describeChanges(project(), project())).toEqual([]);

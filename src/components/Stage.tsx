@@ -141,7 +141,7 @@ export function Stage({ i, onHover }: StageProps) {
       )}
       {empty && (
         <div className="empty-msg">
-          <p>Pas de photo pour ce pan.</p>
+          <p>{wall.calib ? 'Calage prêt : choisis la photo de ce mur, sans la recadrer.' : 'Pas de photo pour ce pan.'}</p>
           <FileButton accept="image/*" onFile={f => void uploadPhoto(i, f)}>Choisir une photo…</FileButton>
         </div>
       )}

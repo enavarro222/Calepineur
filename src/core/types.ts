@@ -45,6 +45,14 @@ export interface CalibPoint {
   py: number;
 }
 
+// Calage préparé avant de disposer de la photo : u et v vont de 0 à 1, depuis le coin haut-gauche de l'image.
+export interface CalibHint {
+  wx: number;
+  wy: number;
+  u: number;
+  v: number;
+}
+
 export interface WallPhoto {
   src: string;
   opacity: number;
@@ -72,6 +80,7 @@ export interface Wall {
   zone: Point[];
   obstacles: Obstacle[];
   photo: WallPhoto | null;
+  calib?: CalibHint[];
   tiles: Record<string, TileOverride>;
 }
 

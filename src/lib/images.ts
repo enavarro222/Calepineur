@@ -25,3 +25,12 @@ export function readImageFile(file: File, maxSide: number): Promise<ReadImage> {
     fr.readAsDataURL(file);
   });
 }
+
+export function imageSize(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onerror = () => reject(new Error('image illisible'));
+    im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+    im.src = url;
+  });
+}

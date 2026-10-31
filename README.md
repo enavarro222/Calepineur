@@ -27,6 +27,8 @@ Une IA avec accès au web peut aussi tout apprendre depuis un seul lien : [llms.
 
 Elle peut répondre par un projet complet, une simple correction, ou un lien de la forme `https://enavarro222.github.io/Calepineur/#config=<JSON encodé>`. Un tel lien ne s'applique jamais tout seul : Calepineur montre les changements et attend ta validation. Les données restent après le `#`, elles ne sont donc pas envoyées au serveur.
 
+Un lien ne peut pas contenir de photo, mais une IA peut préparer le calage d'un mur avec 4 repères (champ `calib`). Il s'applique dès que la photo du mur est choisie, ou tout de suite si elle est déjà chargée.
+
 Les liens préremplis reposent sur des paramètres d'adresse non documentés. Chaque bouton copie donc aussi la consigne, à coller si elle n'apparaît pas.
 
 ## Développement

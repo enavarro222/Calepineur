@@ -27,7 +27,7 @@ export function ConfigReview({ next }: { next: Project }) {
           <ChangeList next={next} />
         </div>
         <div className="btns">
-          <button className="primary" onClick={() => applyConfig(next)}>Appliquer</button>
+          <button className="primary" onClick={() => void applyConfig(next)}>Appliquer</button>
           <button onClick={dismiss}>Ignorer</button>
         </div>
       </div>
@@ -63,7 +63,7 @@ function PasteReply() {
           <h4>À appliquer</h4>
           <ChangeList next={parsed} />
           <p className="hint">Tu pourras revenir en arrière avec ↶.</p>
-          <button className="primary" onClick={() => applyConfig(parsed)}>Appliquer</button>
+          <button className="primary" onClick={() => void applyConfig(parsed)}>Appliquer</button>
         </div>
       )}
     </>
@@ -75,7 +75,7 @@ export function AiDialog() {
   const isDemo = project.walls.every(w => w.id.startsWith('demo-'));
   const [fromCurrent, setFromCurrent] = useState(!isDemo);
   const prompt = useMemo(() => buildPrompt(fromCurrent ? project : null), [fromCurrent, project]);
-  const targets = useMemo(() => aiTargets(prompt), [prompt]);
+  const targets = useMemo(() => aiTargets(buildPrompt(fromCurrent ? project : null, true)), [fromCurrent, project]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
@@ -122,10 +122,10 @@ export function AiDialog() {
         </details>
 
         <h3>2. Ajoute tes photos dans la discussion</h3>
-        <p className="hint">Joins une photo de chaque mur et la référence des carreaux. Aucun lien ne peut le faire à ta place. Tes images restent entre toi et ton IA : Calepineur ne les envoie pas.</p>
+        <p className="hint">Joins une photo de chaque mur, sans la recadrer, et la référence des carreaux. Aucun lien ne peut le faire à ta place. Tes images restent entre toi et ton IA : Calepineur ne les envoie pas.</p>
 
         <h3>3. Colle sa réponse ici</h3>
-        <p className="hint">Elle peut contenir un projet complet ou une simple correction. Si ton IA te donne un lien, clique dessus : Calepineur te montrera les changements.</p>
+        <p className="hint">Elle peut contenir un projet complet ou une simple correction. Si ton IA te donne un lien, clique dessus : Calepineur te montrera les changements. Ton IA ne peut pas renvoyer les photos, mais elle peut préparer leur calage : il s'appliquera quand tu les choisiras.</p>
         <PasteReply />
       </div>
     </div>

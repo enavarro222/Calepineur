@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { dragOnWall, expectNoErrors, failOnConsoleErrors, pngFile, tileCount, wallToScreen } from './helpers';
 
 const WALL_H = 75; // hauteur du premier pan de l'exemple
@@ -223,6 +223,43 @@ test('propose un lien reçu à l\'ouverture de l\'application', async ({ browser
   await page.context().close();
 });
 
+test.describe('calage reçu par lien', () => {
+  const calib = [
+    { wx: 0, wy: 0, u: 0.1, v: 0.8 }, { wx: 240, wy: 0, u: 0.9, v: 0.8 },
+    { wx: 240, wy: 75, u: 0.8, v: 0.2 }, { wx: 0, wy: 75, u: 0.2, v: 0.2 },
+  ];
+  const link = `./#config=${encodeURIComponent(JSON.stringify({ walls: [{ name: 'Mur fenêtre', calib }] }))}`;
+  const handles = (page: Page) => page.locator('[data-handle=calib]').evaluateAll(cs => cs.map(c => [Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))]));
+
+  test('s\'applique quand on choisit la photo', async ({ page }) => {
+    await page.goto(link);
+    await expect(page.getByRole('dialog').getByText('Mur fenêtre : calage photo proposé')).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Appliquer' }).click();
+    await expect(page.getByText('Calage prêt : choisis la photo de ce mur, sans la recadrer.')).toBeVisible();
+
+    const photo = await pngFile(page, 'mur.png', 1200, 800, '#f4efe2');
+    await page.locator('aside input[type=file]').setInputFiles(photo);
+    await expect(page.getByRole('status')).toContainText('Photo calée avec les repères de ton IA');
+    await expect(page.locator('[data-handle=calib]')).toHaveCount(4);
+    expect(await handles(page)).toEqual([[120, 640], [1080, 640], [960, 160], [240, 160]]);
+    await expect(page.locator('.ph-tiles')).toHaveCSS('transform', /^matrix3d/);
+  });
+
+  test('s\'applique directement si la photo est déjà là', async ({ page }) => {
+    const photo = await pngFile(page, 'mur.png', 1200, 800, '#f4efe2');
+    await page.locator('aside input[type=file]').setInputFiles(photo);
+    await expect(page.locator('[data-handle=calib]')).toHaveCount(4);
+
+    await page.goto(link);
+    await page.getByRole('dialog').getByRole('button', { name: 'Appliquer' }).click();
+    await expect.poll(() => handles(page)).toEqual([[120, 640], [1080, 640], [960, 160], [240, 160]]);
+    await expect(page.getByText(/Calage prêt/)).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Annuler' }).click();
+    await expect.poll(() => handles(page)).toEqual([[180, 600], [1020, 600], [1020, 320], [180, 320]]);
+  });
+});
+
 test('publie les instructions pour les IA', async ({ request }) => {
   const res = await request.get('llms.txt');
   expect(res.status()).toBe(200);
@@ -230,6 +267,7 @@ test('publie les instructions pour les IA', async ({ request }) => {
   expect(text).toContain('# Calepineur');
   expect(text).toContain('#config=');
   expect(text).toContain('"version": 1');
+  expect(text).toContain('"calib"');
 });
 
 test('ouvre directement une vue par son adresse', async ({ page }) => {

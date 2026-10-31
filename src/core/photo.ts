@@ -1,6 +1,6 @@
 // Projection du plan sur la photo calée sur 4 repères.
 import { homography, mulH, type Homography } from './geom';
-import type { Point, Wall } from './types';
+import type { CalibHint, CalibPoint, Point, Wall } from './types';
 
 export const PHOTO_K = 6; // px par cm du calque projeté sur la photo
 
@@ -8,6 +8,14 @@ export function photoH(wall: Wall): Homography | null {
   const pts = wall.photo?.pts;
   if (pts?.length !== 4) return null;
   return homography(pts.map((p): Point => [p.wx, p.wy]), pts.map((p): Point => [p.px, p.py]));
+}
+
+export function calibPoints(calib: CalibHint[], w: number, h: number): CalibPoint[] {
+  return calib.map(c => ({ wx: c.wx, wy: c.wy, px: c.u * w, py: c.v * h }));
+}
+
+export function isCalibUsable(calib: CalibHint[]): boolean {
+  return homography(calib.map((c): Point => [c.wx, c.wy]), calib.map((c): Point => [c.u, c.v])) !== null;
 }
 
 // Matrice CSS du calque SVG (px, y vers le bas) vers l'image affichée à l'échelle s.
