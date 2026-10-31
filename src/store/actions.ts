@@ -9,7 +9,7 @@ import { optimizeGrid } from '../core/optimize';
 import { calibPoints } from '../core/photo';
 import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
 import type { Project, Wall } from '../core/types';
-import { imageSize, readImageFile } from '../lib/images';
+import { cropImage, imageSize, readImageFile } from '../lib/images';
 import { removeUnusedImages, writeImage } from './persistence';
 import { commit, getComps, getProject, mutate, replaceProject, setUi, showToast, useStore } from './store';
 
@@ -170,6 +170,29 @@ export async function uploadDesignImage(k: number, file: File): Promise<void> {
   }
 }
 
+const SHEET_MAX_SIDE = 2400; // assez de pixels pour garder chaque motif net une fois découpé
+const MOTIF_MAX_SIDE = 400;
+
+export async function cutDesignsFromPhoto(file: File): Promise<void> {
+  try {
+    const sheet = await readImageFile(file, SHEET_MAX_SIDE);
+    const todo = getProject().designs.filter(d => d.crop);
+    const cut = await Promise.all(todo.map(async d => [d.key, storeImage(await cropImage(sheet.url, d.crop!, MOTIF_MAX_SIDE))] as const));
+    commit(p => {
+      for (const [key, ref] of cut) {
+        const d = p.designs.find(x => x.key === key);
+        if (!d) continue;
+        d.img = ref;
+        delete d.crop;
+      }
+    });
+    removeUnusedImages(getProject());
+    showToast(`${cut.length} motif${cut.length > 1 ? 's' : ''} découpé${cut.length > 1 ? 's' : ''}. Vérifie-les, et remplace ceux qui sont mal cadrés avec Image….`, 6000);
+  } catch (e) {
+    fileError(e);
+  }
+}
+
 export async function importFile(file: File): Promise<void> {
   try {
     const { state, images, missingImages } = parseProjectFile(await file.text());
@@ -205,10 +228,12 @@ async function applyCalibToPhotos(): Promise<void> {
 export async function applyConfig(next: Project): Promise<void> {
   replaceProject(next);
   setUi({ tab: 'wall:0', aiOpen: false, pending: null });
-  const waiting = getProject().walls.some(w => w.calib && !w.photo);
-  showToast(waiting
-    ? 'Modifications appliquées. Choisis la photo de chaque mur : le calage est prêt.'
-    : 'Modifications appliquées. Vérifie les cotes au mètre.', 6000);
+  const { walls, designs } = getProject();
+  const waiting = [
+    ...(walls.some(w => w.calib && !w.photo) ? ['Choisis la photo de chaque mur : le calage est prêt.'] : []),
+    ...(designs.some(d => d.crop) ? ['Dans Carreaux & motifs, choisis la photo des carreaux : la découpe est prête.'] : []),
+  ];
+  showToast(`Modifications appliquées. ${waiting.join(' ') || 'Vérifie les cotes au mètre.'}`, 8000);
   try {
     await applyCalibToPhotos();
   } catch (e) {

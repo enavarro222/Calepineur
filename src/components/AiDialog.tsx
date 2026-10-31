@@ -125,7 +125,7 @@ export function AiDialog() {
         <p className="hint">Joins une photo de chaque mur, sans la recadrer, et la référence des carreaux. Aucun lien ne peut le faire à ta place. Tes images restent entre toi et ton IA : Calepineur ne les envoie pas.</p>
 
         <h3>3. Colle sa réponse ici</h3>
-        <p className="hint">Elle peut contenir un projet complet ou une simple correction. Si ton IA te donne un lien, clique dessus : Calepineur te montrera les changements. Ton IA ne peut pas renvoyer les photos, mais elle peut préparer leur calage : il s'appliquera quand tu les choisiras.</p>
+        <p className="hint">Elle peut contenir un projet complet ou une simple correction. Si ton IA te donne un lien, clique dessus : Calepineur te montrera les changements. Ton IA ne peut pas renvoyer d'images, mais elle peut préparer le calage des photos et la découpe des motifs : ils s'appliqueront quand tu choisiras ces photos.</p>
         <PasteReply />
       </div>
     </div>

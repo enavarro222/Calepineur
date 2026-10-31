@@ -249,6 +249,25 @@ describe('calage reçu sans photo', () => {
   });
 });
 
+describe('découpe reçue sans photo', () => {
+  it('indique que la photo des carreaux est attendue', async () => {
+    const { user, tab } = setup();
+    const crop = { u: 0, v: 0, w: 0.5, h: 0.5 };
+    act(() => applyHash(`#config=${encodeURIComponent(JSON.stringify({ designs: [{ key: 'A', crop }, { key: 'B', crop }] }))}`));
+    await user.click(screen.getByRole('button', { name: 'Appliquer' }));
+    expect(screen.getByRole('status')).toHaveTextContent('la découpe est prête');
+    await tab('Carreaux & motifs');
+    expect(screen.getByText(/Découpe prête pour 2 motifs/)).toBeInTheDocument();
+    expect(screen.getByText('Choisir la photo des carreaux…')).toBeInTheDocument();
+  });
+
+  it('ne dit rien sans découpe', async () => {
+    const { tab } = setup();
+    await tab('Carreaux & motifs');
+    expect(screen.queryByText(/Découpe prête/)).toBeNull();
+  });
+});
+
 describe('édition d\'un pan', () => {
   it('recalcule en changeant une dimension', async () => {
     const { user } = setup();

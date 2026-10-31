@@ -1,4 +1,6 @@
 // Réduit une image choisie par l'utilisateur pour tenir dans le stockage du navigateur.
+import type { DesignCrop } from '../core/types';
+
 export interface ReadImage {
   url: string;
   w: number;
@@ -31,6 +33,24 @@ export function imageSize(url: string): Promise<{ w: number; h: number }> {
     const im = new Image();
     im.onerror = () => reject(new Error('image illisible'));
     im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+    im.src = url;
+  });
+}
+
+export function cropImage(url: string, crop: DesignCrop, maxSide: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onerror = () => reject(new Error('image illisible'));
+    im.onload = () => {
+      const sw = crop.w * im.naturalWidth;
+      const sh = crop.h * im.naturalHeight;
+      const k = Math.min(1, maxSide / Math.max(sw, sh));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(sw * k));
+      cv.height = Math.max(1, Math.round(sh * k));
+      cv.getContext('2d')!.drawImage(im, crop.u * im.naturalWidth, crop.v * im.naturalHeight, sw, sh, 0, 0, cv.width, cv.height);
+      resolve(cv.toDataURL('image/jpeg', 0.9));
+    };
     im.src = url;
   });
 }

@@ -44,7 +44,12 @@ const CALIB = `Calage photo : tu ne peux pas transmettre mes photos, mais tu peu
 - u, v : position sur la photo d'origine, non recadrée, de 0 à 1 ; u depuis la gauche, v depuis le haut.
 Dis-moi quelle photo choisir pour chaque mur : je la charge dans Calepineur et le calage s'applique tout seul. Je l'ajusterai à la main si besoin.`;
 
-const CALIB_POINTER = `Calage photo : si tu as accès au web, lis ${GUIDE_URL} pour préparer le calage de mes photos.`;
+const CROP = `Découpe des motifs : si une photo montre tous les carreaux, indique où se trouve chacun. Ajoute à chaque motif un champ "crop" : le rectangle qui entoure le carreau, bien de face.
+{ "designs": [{ "key": "A", "crop": { "u": 0.05, "v": 0.1, "w": 0.2, "h": 0.25 } }] }
+- u, v : coin haut-gauche du rectangle sur la photo d'origine, non recadrée. w, h : sa largeur et sa hauteur. Tout est en proportions de l'image, de 0 à 1.
+Je charge cette photo dans Calepineur et chaque motif est découpé automatiquement. Dis-moi quelle photo choisir.`;
+
+const IMAGES_POINTER = `Photos : si tu as accès au web, lis ${GUIDE_URL} pour préparer le calage de mes photos et la découpe de mes motifs.`;
 
 const LINK = `Lien : tu peux aussi donner la configuration, complète ou partielle, sous forme d'un lien à cliquer :
 ${APP_URL}#config=<JSON encodé>
@@ -84,7 +89,9 @@ Après le bloc, liste les cotes que tu as estimées d'après les photos, pour qu
 
 ${PARTIAL}
 
-${compact ? CALIB_POINTER : CALIB}
+${compact ? IMAGES_POINTER : `${CALIB}
+
+${CROP}`}
 
 ${LINK}`;
 }

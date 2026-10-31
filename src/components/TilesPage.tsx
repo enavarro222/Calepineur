@@ -5,7 +5,7 @@ import { cm } from '../core/format';
 import { hashStr, mulberry32 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import type { Project, RotMode, Wall } from '../core/types';
-import { addDesign, deleteDesign, renameDesignKey, resetProject, shuffle, uploadDesignImage } from '../store/actions';
+import { addDesign, cutDesignsFromPhoto, deleteDesign, renameDesignKey, resetProject, shuffle, uploadDesignImage } from '../store/actions';
 import { commit, useStore } from '../store/store';
 import { FileButton, NumField, SegRadio } from './fields';
 import { HexSwatch } from './HexSwatch';
@@ -58,6 +58,7 @@ export function TilesPage() {
   const t = project.tile;
   const g = latticeFor(t);
   const edit = (path: string, fn: (p: Project) => void) => commit(fn, { coalesce: path });
+  const cropCount = project.designs.filter(d => d.crop).length;
 
   return (
     <div id="page">
@@ -83,6 +84,12 @@ export function TilesPage() {
 
         <section className="card">
           <h3>Motifs</h3>
+          {cropCount > 0 && (
+            <div className="calib-ready">
+              <p>Découpe prête pour {cropCount} motif{cropCount > 1 ? 's' : ''} : choisis la photo qui montre tous les carreaux, sans la recadrer.</p>
+              <FileButton accept="image/*" onFile={f => void cutDesignsFromPhoto(f)}>Choisir la photo des carreaux…</FileButton>
+            </div>
+          )}
           <table className="designs">
             <thead>
               <tr><th></th><th>Clé</th><th>Nom</th><th title="0 = motif non utilisé ; 2 = deux fois plus fréquent">Poids</th><th>Couleur</th><th></th><th></th></tr>

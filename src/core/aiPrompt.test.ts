@@ -48,10 +48,16 @@ describe('liens', () => {
     expect(resolveConfig(base, json).walls[0]!.calib).toHaveLength(4);
   });
 
+  it('donne un exemple de découpe valide', () => {
+    const json = /\{ "designs": \[\{ "key": "A", "crop".*\}/.exec(buildPrompt(null))![0];
+    expect(resolveConfig(project(), json).designs[0]!.crop).toEqual({ u: 0.05, v: 0.1, w: 0.2, h: 0.25 });
+  });
+
   it('renvoie vers le guide pour le calage dans les liens préremplis', () => {
     const compact = buildPrompt(null, true);
     expect(compact).toContain('llms.txt');
     expect(compact).not.toContain('"calib"');
+    expect(compact).not.toContain('"crop"');
   });
 
   it('explique tout dans le fichier pour les IA', () => {
@@ -60,6 +66,7 @@ describe('liens', () => {
     expect(guide).toContain('"version": 1');
     expect(guide).toContain('Modification partielle');
     expect(guide).toContain('"calib"');
+    expect(guide).toContain('"crop"');
   });
 });
 

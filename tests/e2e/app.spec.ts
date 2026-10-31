@@ -260,6 +260,52 @@ test.describe('calage reçu par lien', () => {
   });
 });
 
+test('découpe les motifs dans une seule photo', async ({ page }) => {
+  const config = { designs: [{ key: 'A', crop: { u: 0, v: 0, w: 0.5, h: 1 } }, { key: 'B', crop: { u: 0.5, v: 0, w: 0.5, h: 1 } }] };
+  await page.goto(`./#config=${encodeURIComponent(JSON.stringify(config))}`);
+  await expect(page.getByRole('dialog').getByText('Découpe proposée pour 2 motifs')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Appliquer' }).click();
+  await page.locator('nav').getByRole('button', { name: 'Carreaux & motifs' }).click();
+  await expect(page.getByText(/Découpe prête pour 2 motifs/)).toBeVisible();
+
+  // planche générée : moitié gauche rouge, moitié droite bleue
+  const dataUrl = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 200;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#ff0000';
+    g.fillRect(0, 0, 200, 200);
+    g.fillStyle = '#0000ff';
+    g.fillRect(200, 0, 200, 200);
+    return c.toDataURL('image/png');
+  });
+  await page.getByText('Choisir la photo des carreaux…').locator('input').setInputFiles({
+    name: 'motifs.png', mimeType: 'image/png', buffer: Buffer.from(dataUrl.split(',')[1]!, 'base64'),
+  });
+  await expect(page.getByRole('status')).toContainText('2 motifs découpés');
+  await expect(page.getByText(/Découpe prête/)).toHaveCount(0);
+
+  const centerColor = (row: number) => page.locator('table.designs .hexsw').nth(row).evaluate(async el => {
+    const url = /url\("(.+)"\)/.exec(getComputedStyle(el).backgroundImage)![1]!;
+    const im = new Image();
+    im.src = url;
+    await im.decode();
+    const c = document.createElement('canvas');
+    c.width = im.naturalWidth;
+    c.height = im.naturalHeight;
+    const g = c.getContext('2d')!;
+    g.drawImage(im, 0, 0);
+    const [r, , b] = g.getImageData(c.width / 2, c.height / 2, 1, 1).data;
+    return r! > b! ? 'rouge' : 'bleu';
+  });
+  expect(await centerColor(0)).toBe('rouge');
+  expect(await centerColor(1)).toBe('bleu');
+
+  await page.getByRole('button', { name: 'Annuler' }).click();
+  await expect(page.getByText(/Découpe prête pour 2 motifs/)).toBeVisible();
+});
+
 test('publie les instructions pour les IA', async ({ request }) => {
   const res = await request.get('llms.txt');
   expect(res.status()).toBe(200);
@@ -268,6 +314,7 @@ test('publie les instructions pour les IA', async ({ request }) => {
   expect(text).toContain('#config=');
   expect(text).toContain('"version": 1');
   expect(text).toContain('"calib"');
+  expect(text).toContain('"crop"');
 });
 
 test('ouvre directement une vue par son adresse', async ({ page }) => {

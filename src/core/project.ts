@@ -1,5 +1,5 @@
 // Lecture et écriture du fichier projet. Le contenu importé est validé champ par champ.
-import type { BrushState, CalibHint, Design, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
+import type { BrushState, CalibHint, Design, DesignCrop, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
 
 export type ImageStore = Record<string, string>;
 
@@ -58,6 +58,13 @@ function parseTile(v: unknown): TileSpec {
   };
 }
 
+function parseCrop(v: unknown, what: string): DesignCrop {
+  const c = obj(v, what);
+  const crop = { u: num(c.u, `${what}.u`), v: num(c.v, `${what}.v`), w: num(c.w, `${what}.w`), h: num(c.h, `${what}.h`) };
+  const inside = crop.u >= 0 && crop.v >= 0 && crop.w > 0 && crop.h > 0 && crop.u + crop.w <= 1 && crop.v + crop.h <= 1;
+  return inside ? crop : fail(`${what} : le rectangle doit tenir dans l'image, en proportions de 0 à 1`);
+}
+
 function parseDesign(v: unknown, i: number): Design {
   const d = obj(v, `designs[${i}]`);
   return {
@@ -66,6 +73,7 @@ function parseDesign(v: unknown, i: number): Design {
     img: str(d.img),
     color: str(d.color, '#999999'),
     weight: optNum(d.weight, `designs[${i}].weight`, 1),
+    ...(d.crop != null ? { crop: parseCrop(d.crop, `designs[${i}].crop`) } : {}),
   };
 }
 

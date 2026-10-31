@@ -21,13 +21,16 @@ Le mélange équilibre les quantités et évite deux motifs identiques côte à 
 
 ## Préparer le projet avec une IA
 
-**Préparer avec une IA** ouvre Claude, ChatGPT, Le Chat ou Gemini avec une consigne prête à l'emploi. Tu ajoutes tes photos et ta référence de carreaux dans la discussion, puis tu colles la réponse dans Calepineur, qui la vérifie et résume les changements avant de les appliquer. Les images restent à charger dans l'app : une IA ne peut pas les modifier, et les cotes estimées sont à vérifier au mètre.
+**Préparer avec une IA** ouvre Claude, ChatGPT, Le Chat ou Gemini avec une consigne prête à l'emploi. Tu ajoutes tes photos et ta référence de carreaux dans la discussion, puis tu colles la réponse dans Calepineur, qui la vérifie et résume les changements avant de les appliquer. Les images restent à charger dans l'app, et les cotes estimées sont à vérifier au mètre.
 
 Une IA avec accès au web peut aussi tout apprendre depuis un seul lien : [llms.txt](https://enavarro222.github.io/Calepineur/llms.txt).
 
 Elle peut répondre par un projet complet, une simple correction, ou un lien de la forme `https://enavarro222.github.io/Calepineur/#config=<JSON encodé>`. Un tel lien ne s'applique jamais tout seul : Calepineur montre les changements et attend ta validation. Les données restent après le `#`, elles ne sont donc pas envoyées au serveur.
 
-Un lien ne peut pas contenir de photo, mais une IA peut préparer le calage d'un mur avec 4 repères (champ `calib`). Il s'applique dès que la photo du mur est choisie, ou tout de suite si elle est déjà chargée.
+Un lien ne peut pas contenir d'image, mais une IA peut préparer leur traitement :
+
+- `calib` sur un mur : 4 repères de calage, appliqués dès que la photo du mur est choisie, ou tout de suite si elle est déjà chargée.
+- `crop` sur un motif : l'emplacement du carreau sur une photo qui les montre tous. Calepineur découpe les motifs quand cette photo est choisie.
 
 Les liens préremplis reposent sur des paramètres d'adresse non documentés. Chaque bouton copie donc aussi la consigne, à coller si elle n'apparaît pas.
 

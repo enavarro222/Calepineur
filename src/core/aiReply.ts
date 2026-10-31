@@ -11,7 +11,7 @@ const MAX_TILES_PER_WALL = 20000;
 const OTHER_TILE_FIELDS = ['grout', 'edgeGap', 'waste', 'minPiece', 'perBox', 'm2PerBox'] as const;
 const TILE_FIELDS = ['F', 'joint', 'orient', ...OTHER_TILE_FIELDS] as const;
 const WALL_FIELDS = ['name', 'W', 'H', 'color', 'ox', 'oy', 'zoneMode', 'zone', 'obstacles', 'calib'] as const;
-const DESIGN_FIELDS = ['name', 'color', 'weight'] as const;
+const DESIGN_FIELDS = ['name', 'color', 'weight', 'crop'] as const;
 
 type Raw = Record<string, unknown>;
 
@@ -170,6 +170,8 @@ export function describeChanges(a: Project, b: Project): string[] {
   if (a.name !== b.name) lines.push(`Projet : ${b.name}`);
   lines.push(...tileChanges(a, b), ...designChanges(a, b));
   if (a.rotMode !== b.rotMode || a.seed !== b.seed) lines.push('Répartition des motifs modifiée');
+  const crops = b.designs.filter(d => d.crop && !same(d.crop, a.designs.find(c => c.key === d.key)?.crop)).length;
+  if (crops) lines.push(`Découpe proposée pour ${crops} motif${crops > 1 ? 's' : ''}`);
   for (const w of b.walls) {
     const old = a.walls.find(c => c.id === w.id);
     const n = w.obstacles.length;

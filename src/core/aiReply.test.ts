@@ -189,6 +189,40 @@ describe('calage par lien', () => {
   });
 });
 
+describe('découpe des motifs', () => {
+  const crop = { u: 0.1, v: 0.1, w: 0.2, h: 0.3 };
+
+  it('prépare la découpe d\'un motif', () => {
+    const p = patch({ designs: [{ key: 'A', crop }] });
+    expect(p.designs[0]).toMatchObject({ key: 'A', name: 'Alpha', crop });
+  });
+
+  it('la garde dans un projet complet', () => {
+    const full = project();
+    full.designs[0]!.crop = crop;
+    expect(resolveConfig(project(), JSON.stringify(full)).designs[0]!.crop).toEqual(crop);
+  });
+
+  it('survit à la sauvegarde', () => {
+    const p = project();
+    p.designs[0]!.crop = crop;
+    expect(parseProject(JSON.parse(JSON.stringify(p)))).toEqual(p);
+  });
+
+  it('l\'annonce dans les changements', () => {
+    const next = patch({ designs: [{ key: 'A', crop }, { key: 'B', crop }] });
+    expect(describeChanges(project(), next)).toEqual(['Découpe proposée pour 2 motifs']);
+  });
+
+  it.each([
+    ['un rectangle qui sort de l\'image', { ...crop, u: 0.9 }],
+    ['des pixels', { u: 10, v: 10, w: 100, h: 100 }],
+    ['un rectangle vide', { ...crop, w: 0 }],
+  ])('refuse %s', (_, bad) => {
+    expect(() => patch({ designs: [{ key: 'A', crop: bad }] })).toThrow(/tenir dans l'image/);
+  });
+});
+
 describe('describeChanges', () => {
   it('ne signale rien sans changement', () => {
     expect(describeChanges(project(), project())).toEqual([]);

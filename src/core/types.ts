@@ -22,12 +22,21 @@ export interface TileSpec {
   m2PerBox: number;
 }
 
+// Rectangle autour d'un carreau sur une photo de tous les motifs, en proportions de l'image.
+export interface DesignCrop {
+  u: number;
+  v: number;
+  w: number;
+  h: number;
+}
+
 export interface Design {
   key: string;
   name: string;
   img: string; // 'img:<id>' (image stockée), 'data:…' (intégrée) ou '' (couleur seule)
   color: string;
   weight: number;
+  crop?: DesignCrop; // découpe préparée, en attente de la photo
 }
 
 export interface Obstacle {
