@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { commit, getComps, getProject, replaceProject, resetStore, setUi, undo, useStore, type Tool } from './store';
+import { commit, getComps, getProject, getUi, replaceProject, resetStore, setUi, undo, useStore, type Tool } from './store';
 import { hoverInfo, isDragging, moveDrag, press, release, type StagePoint } from './tools';
 import { project, wall } from '../test/fixtures';
 import type { Point, Wall } from '../core/types';
@@ -71,6 +71,75 @@ describe('Pivoter', () => {
   it('ne capture pas le pointeur', () => {
     use('rotate');
     expect(press(0, at([20, 15]), LEFT)).toBe(false);
+  });
+});
+
+describe('Échanger', () => {
+  const designAt = (x: number, y: number) => tiles()[keyAt(x, y)]?.d;
+
+  it('intervertit deux carreaux et les verrouille', () => {
+    use('swap');
+    useStore.setState({ past: [] });
+    const [a, b] = [designAt(20, 15), designAt(60, 15)];
+    expect(a).not.toBe(b);
+    expect(press(0, at([20, 15]), LEFT)).toBe(false);
+    expect(getUi().swapFrom?.key).toBe(keyAt(20, 15));
+    press(0, at([60, 15]), LEFT);
+    expect([designAt(20, 15), designAt(60, 15)]).toEqual([b, a]);
+    expect(tiles()[keyAt(20, 15)]?.lk).toBe(true);
+    expect(tiles()[keyAt(60, 15)]?.lk).toBe(true);
+    expect(getUi().swapFrom).toBeNull();
+    expect(useStore.getState().past).toHaveLength(1);
+  });
+
+  it('garde les quantités', () => {
+    use('swap');
+    const counts = () => Object.values(tiles()).map(t => t.d).sort();
+    const before = counts();
+    press(0, at([20, 15]), LEFT);
+    press(0, at([60, 15]), LEFT);
+    expect(counts()).toEqual(before);
+  });
+
+  it('échange aussi la rotation', () => {
+    use('swap');
+    commit(p => { p.walls[0]!.tiles[keyAt(20, 15)]!.rot = 2; });
+    press(0, at([20, 15]), LEFT);
+    press(0, at([60, 15]), LEFT);
+    expect(tiles()[keyAt(60, 15)]?.rot).toBe(2);
+  });
+
+  it('s\'annule d\'un coup', () => {
+    use('swap');
+    const a = designAt(20, 15);
+    press(0, at([20, 15]), LEFT);
+    press(0, at([60, 15]), LEFT);
+    undo();
+    expect(designAt(20, 15)).toBe(a);
+  });
+
+  it('désélectionne avec un second clic sur le même carreau', () => {
+    use('swap');
+    press(0, at([20, 15]), LEFT);
+    press(0, at([20, 15]), LEFT);
+    expect(getUi().swapFrom).toBeNull();
+  });
+
+  it('ignore les emplacements vides', () => {
+    use('swap');
+    press(0, at([20, 50]), LEFT);
+    expect(getUi().swapFrom).toBeNull();
+  });
+
+  it('signale deux motifs identiques', () => {
+    use('swap');
+    const key = keyAt(60, 15);
+    commit(p => { p.walls[0]!.tiles[key]!.d = p.walls[0]!.tiles[keyAt(20, 15)]!.d; });
+    const past = useStore.getState().past.length;
+    press(0, at([20, 15]), LEFT);
+    press(0, at([60, 15]), LEFT);
+    expect(useStore.getState().toast?.msg).toMatch(/même motif/);
+    expect(useStore.getState().past).toHaveLength(past);
   });
 });
 

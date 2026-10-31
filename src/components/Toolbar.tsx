@@ -2,7 +2,7 @@ import { shuffle } from '../store/actions';
 import { setUi, useStore, type Tool, type View } from '../store/store';
 import { HexSwatch } from './HexSwatch';
 
-const COMMON_TOOLS: [Tool, string][] = [['paint', 'Peindre'], ['rotate', 'Pivoter'], ['toggle', 'Pinceau zone'], ['zone', 'Contour zone']];
+const COMMON_TOOLS: [Tool, string][] = [['paint', 'Peindre'], ['rotate', 'Pivoter'], ['swap', 'Échanger'], ['toggle', 'Pinceau zone'], ['zone', 'Contour zone']];
 const PLAN_TOOLS: [Tool, string][] = [...COMMON_TOOLS, ['obst', 'Éléments'], ['grid', 'Grille']];
 const PHOTO_TOOLS: [Tool, string][] = [...COMMON_TOOLS, ['calib', 'Caler la photo']];
 const VIEWS: [View, string][] = [['plan', 'Plan'], ['photo', 'Photo']];
@@ -27,7 +27,7 @@ export function Toolbar({ i }: { i: number }) {
         {VIEWS.map(([v, l]) => <button key={v} className={on(v === view)} onClick={() => setView(v)}>{l}</button>)}
       </div>
       <div className="seg">
-        {tools.map(([v, l]) => <button key={v} className={on(v === tool)} onClick={() => setUi({ tool: v })}>{l}</button>)}
+        {tools.map(([v, l]) => <button key={v} className={on(v === tool)} title={v === 'swap' ? 'Clique sur deux carreaux pour les intervertir, sans changer les quantités' : undefined} onClick={() => setUi({ tool: v, swapFrom: null })}>{l}</button>)}
       </div>
       <div className="palette" title="Motif à peindre (touches 1 à 9)">
         {designs.map(d => (
@@ -38,9 +38,11 @@ export function Toolbar({ i }: { i: number }) {
       </div>
       <div className="seg">
         <button className={on(ui.labels)} title="Étiquettes des carreaux" onClick={() => setUi({ labels: !ui.labels })}>Repères</button>
+        <button className={on(ui.defects)} title="Surligne les voisins identiques, alignements, amas et taches" onClick={() => setUi({ defects: !ui.defects })}>Défauts</button>
         {view === 'plan' && <button className={on(ui.cuts)} title="Contour des carreaux coupés" onClick={() => setUi({ cuts: !ui.cuts })}>Coupes</button>}
       </div>
       <button title="Nouvelle répartition aléatoire (garde les carreaux peints à la main)" onClick={() => shuffle(true)}>Mélanger</button>
+      <button className="primary" title="Cherche plusieurs répartitions plus harmonieuses, à quantités égales" onClick={() => setUi({ harmonyOpen: true })}>Harmoniser</button>
     </div>
   );
 }

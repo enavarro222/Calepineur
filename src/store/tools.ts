@@ -5,7 +5,7 @@ import { cm } from '../core/format';
 import { applyH } from '../core/geom';
 import { photoH } from '../core/photo';
 import type { BrushState, Point, Wall } from '../core/types';
-import { commit, endGesture, getComps, getProject, getUi, mutate, pushUndo } from './store';
+import { commit, endGesture, getComps, getProject, getUi, mutate, pushUndo, setUi, showToast } from './store';
 
 export interface StagePoint {
   w: Point | null; // position sur le pan, en cm (null si la photo n'est pas calée)
@@ -67,6 +67,39 @@ function rotateTile(i: number, x: number, y: number): void {
   });
 }
 
+// Échanger : deux clics intervertissent motif et rotation. Les quantités ne changent pas.
+function swapTile(i: number, x: number, y: number): void {
+  const w = wallAt(i);
+  if (!inWall(w, x, y)) return;
+  const h = tileAtPoint(i, x, y);
+  if (!h.t) return;
+  const here = { wallId: w.id, key: h.key };
+  const from = getUi().swapFrom;
+  if (from?.wallId === here.wallId && from.key === here.key) {
+    setUi({ swapFrom: null });
+    return;
+  }
+  const fromWall = from ? getProject().walls.findIndex(x2 => x2.id === from.wallId) : -1;
+  const a = from && fromWall >= 0 ? getProject().walls[fromWall]!.tiles[from.key] : undefined;
+  if (!from || !a || !getComps()[fromWall]!.byKey.has(from.key)) {
+    setUi({ swapFrom: here });
+    return;
+  }
+  setUi({ swapFrom: null });
+  if (a.d === w.tiles[h.key]?.d) {
+    showToast('Ces deux carreaux ont le même motif.');
+    return;
+  }
+  commit(p => {
+    const first = p.walls[fromWall]!.tiles[from.key]!;
+    const second = p.walls[i]!.tiles[h.key]!;
+    [first.d, second.d] = [second.d, first.d];
+    [first.rot, second.rot] = [second.rot, first.rot];
+    first.lk = true;
+    second.lk = true;
+  });
+}
+
 // Pinceau zone : mode 'add' ou 'del', fixé au début du tracé. Un réglage contraire est d'abord simplement annulé.
 function brushTile(i: number, x: number, y: number, mode: BrushState): void {
   const w = wallAt(i);
@@ -110,6 +143,10 @@ export function press(i: number, pt: StagePoint, info: PressInfo): boolean {
   if (!pt.w) return false;
   const [x, y] = pt.w;
 
+  if (tool === 'swap') {
+    if (info.button !== 2) swapTile(i, x, y);
+    return false;
+  }
   if (tool === 'toggle') {
     const mode: BrushState = info.button === 2 || tileAtPoint(i, x, y).t ? 'del' : 'add';
     begin({ type: 'brush', mode });

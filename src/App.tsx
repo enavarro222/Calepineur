@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AiDialog, ConfigReview } from './components/AiDialog';
+import { HarmonyDialog } from './components/HarmonyDialog';
 import { OrderPage } from './components/OrderPage';
 import { PrintPage } from './components/PrintPage';
 import { TilesPage } from './components/TilesPage';
@@ -100,6 +101,7 @@ export function App() {
   const tab = useStore(s => s.ui.tab);
   const aiOpen = useStore(s => s.ui.aiOpen);
   const pending = useStore(s => s.ui.pending);
+  const harmonyOpen = useStore(s => s.ui.harmonyOpen);
 
   useEffect(() => {
     const toPrint = () => setUi({ tab: 'print' });
@@ -126,6 +128,7 @@ export function App() {
       </main>
       {aiOpen && <AiDialog />}
       {pending && <ConfigReview next={pending} />}
+      {harmonyOpen && <HarmonyDialog />}
       <Toast />
     </>
   );

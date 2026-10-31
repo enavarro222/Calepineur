@@ -1,5 +1,5 @@
 // Scène d'un pan : vue Plan ou vue Photo, et traduction du pointeur vers les outils.
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { fmt, cm } from '../core/format';
 import { applyH, invH } from '../core/geom';
 import { PHOTO_K, photoH, photoMatrix } from '../core/photo';
@@ -8,6 +8,7 @@ import type { Point, Wall } from '../core/types';
 import { uploadPhoto } from '../store/actions';
 import { getProject, useStore, type View } from '../store/store';
 import { hoverInfo, isDragging, moveDrag, press, release, type HoverInfo, type StagePoint } from '../store/tools';
+import { useHarmony } from '../store/harmony';
 import { FileButton } from './fields';
 import { WallSvg } from './WallSvg';
 
@@ -68,6 +69,9 @@ export function Stage({ i, onHover }: StageProps) {
   const tool = useStore(s => s.ui.tool);
   const labels = useStore(s => s.ui.labels);
   const cuts = useStore(s => s.ui.cuts);
+  const showDefects = useStore(s => s.ui.defects);
+  const swapFrom = useStore(s => s.ui.swapFrom);
+  const harmony = useHarmony();
   const view: View = useStore(s => s.ui.view[i] ?? 'plan');
   const wall = project.walls[i];
 
@@ -86,7 +90,9 @@ export function Stage({ i, onHover }: StageProps) {
   }, [measure]);
 
   const src = wall ? imageUrl(wall.photo?.src, images) : '';
+  const defects = useMemo(() => (showDefects ? harmony.defects.filter(d => d.wall === i) : undefined), [showDefects, harmony, i]);
   if (!wall || !comp) return null;
+  const selected = swapFrom?.wallId === wall.id ? swapFrom.key : null;
 
   const photoView = view === 'photo';
   const stagePoint = (e: PointerEvent): StagePoint | null => {
@@ -137,7 +143,7 @@ export function Stage({ i, onHover }: StageProps) {
     >
       {!photoView && (
         <WallSvg project={project} wall={wall} comp={comp} images={images} mode="plan" uid="p"
-          labels={labels} cuts={cuts} tool={tool} hoverPoints={hoverPts} />
+          labels={labels} cuts={cuts} tool={tool} hoverPoints={hoverPts} defects={defects} selected={selected} />
       )}
       {empty && (
         <div className="empty-msg">
@@ -159,7 +165,7 @@ export function Stage({ i, onHover }: StageProps) {
               }}
             >
               <WallSvg project={project} wall={wall} comp={comp} images={images} mode="photo" uid="f" k={PHOTO_K}
-                outlines={calib} labels={labels} tool={tool} />
+                outlines={calib} labels={labels} tool={tool} defects={defects} selected={selected} />
             </div>
           )}
           {scale && (

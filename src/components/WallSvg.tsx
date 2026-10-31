@@ -3,6 +3,7 @@ import { memo, type ReactNode } from 'react';
 import type { PlacedTile, WallComp } from '../core/compute';
 import { cm, fmt } from '../core/format';
 import { mpCentroid } from '../core/geom';
+import type { Defect, DefectType } from '../core/harmony';
 import type { Lattice } from '../core/lattice';
 import { imageUrl, type ImageStore } from '../core/project';
 import type { Design, MultiPolygon, Point, Project, TileOverride, Wall } from '../core/types';
@@ -52,6 +53,37 @@ export interface WallSvgProps {
   tool?: Tool;
   outlines?: boolean;
   k?: number;
+  bare?: boolean; // sans règles ni marges, pour les miniatures
+  defects?: Defect[];
+  selected?: string | null;
+}
+
+export const DEFECT_COLORS: Record<DefectType, string> = { adjacent: '#d6202e', line: '#ef7d00', clump: '#8a2be2', tone: '#111111' };
+
+function DefectMarks({ comp, defects, sy, r, sw, fs }: { comp: WallComp; defects: Defect[]; sy: (y: number) => number; r: number; sw: number; fs: number }) {
+  const center = (key: string): string => {
+    const c = comp.byKey.get(key)!.c;
+    return `${fmt(c[0])},${fmt(sy(c[1]))}`;
+  };
+  const known = defects.filter(d => d.keys.every(k => comp.byKey.has(k)));
+  return (
+    <g data-testid="defects" pointerEvents="none" fill="none">
+      {known.map((d, i) => {
+        const stroke = DEFECT_COLORS[d.type];
+        if (d.type === 'adjacent' || d.type === 'line') {
+          return <polyline key={i} data-defect={d.type} points={d.keys.map(center).join(' ')} stroke={stroke} strokeWidth={fmt(sw * 5)} strokeLinecap="round" />;
+        }
+        return (
+          <g key={i} data-defect={d.type} stroke={stroke} strokeWidth={fmt(sw * 3)} strokeDasharray={d.type === 'tone' ? `${fmt(fs * .5)} ${fmt(fs * .3)}` : undefined}>
+            {d.keys.map(k => {
+              const [x, y] = comp.byKey.get(k)!.c;
+              return <polygon key={k} points={comp.g.verts(x, y, r).map(q => `${fmt(q[0])},${fmt(sy(q[1]))}`).join(' ')} />;
+            })}
+          </g>
+        );
+      })}
+    </g>
+  );
 }
 
 function Rulers({ W, H, fs, sw }: { W: number; H: number; fs: number; sw: number }) {
@@ -80,7 +112,7 @@ function Rulers({ W, H, fs, sw }: { W: number; H: number; fs: number; sw: number
 }
 
 const WallContent = memo(function WallContent(p: WallSvgProps) {
-  const { project, wall, comp, images, mode, uid, labels, cuts, tool, outlines } = p;
+  const { project, wall, comp, images, mode, uid, labels, cuts, tool, outlines, bare, defects, selected } = p;
   const { W, H } = wall;
   const g = comp.g;
   const sy = (y: number) => H - y;
@@ -212,7 +244,12 @@ const WallContent = memo(function WallContent(p: WallSvgProps) {
         </>
       )}
 
-      {!photo && <Rulers W={W} H={H} fs={fs} sw={sw} />}
+      {defects && <DefectMarks comp={comp} defects={defects} sy={sy} r={g.R * .86} sw={sw} fs={fs} />}
+      {selected && comp.byKey.has(selected) && (
+        <polygon data-testid="swap-from" points={pts(comp.byKey.get(selected)!.v)} fill="rgba(224,33,138,.25)" stroke="#e0218a" strokeWidth={fmt(sw * 4)} pointerEvents="none" />
+      )}
+
+      {!photo && !bare && <Rulers W={W} H={H} fs={fs} sw={sw} />}
     </>
   );
 });
@@ -221,7 +258,7 @@ export function WallSvg({ hoverPoints, ...p }: WallSvgProps & { hoverPoints?: st
   const { W, H } = p.wall;
   const photo = p.mode === 'photo';
   const fs = Math.max(W, H) / 75;
-  const m = photo ? { l: 0, r: 0, t: 0, b: 0 } : { l: fs * 4.5, r: fs * 1.5, t: fs * 1.5, b: fs * 4 };
+  const m = photo || p.bare ? { l: 0, r: 0, t: 0, b: 0 } : { l: fs * 4.5, r: fs * 1.5, t: fs * 1.5, b: fs * 4 };
   const vb = [-m.l, -m.t, W + m.l + m.r, H + m.t + m.b].map(fmt).join(' ');
   const size = photo ? { width: fmt(W * (p.k ?? 1)), height: fmt(H * (p.k ?? 1)) } : {};
   return (

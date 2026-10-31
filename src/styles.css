@@ -188,3 +188,19 @@ table.designs td:nth-child(3) { width: 100%; }
 .guide-link input { flex: 1; }
 .calib-ready p { margin: 0 0 6px; }
 .calib-ready { margin: 4px 0 6px; padding: 6px 8px; font-size: 12.5px; color: var(--accent); background: var(--accent-soft); border-radius: 5px; }
+
+/* ---- harmonie ---- */
+.stage[data-tool=swap] { cursor: pointer; }
+.harmony-status { flex: 1; text-align: right; }
+.defect-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.dialog.wide { max-width: 1040px; }
+.proposals { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; margin: 10px 0; }
+.proposal { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 12px; background: #fff; min-width: 0; }
+.proposal h3 { margin: 2px 0 6px; }
+.proposal h3 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.proposal-walls svg { display: block; width: 100%; height: auto; margin-bottom: 4px; }
+@media (max-width: 820px) { .proposals { grid-template-columns: 1fr; } }
+
+/* Le texte de survol a sa propre ligne : il ne doit jamais changer la hauteur de la scène pendant un geste. */
+.status .hov { order: 3; flex: 1 0 100%; min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status .harmony-status { text-align: left; }

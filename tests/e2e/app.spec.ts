@@ -57,6 +57,54 @@ test('retouche la zone au pinceau', async ({ page }) => {
   expect(await tileCount(page)).toBe(start);
 });
 
+test('échange deux carreaux à la souris', async ({ page }) => {
+  const label = async (x: number, y: number) => {
+    const p = await wallToScreen(page, x, y, WALL_H);
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.move(p.x + 1, p.y);
+    return (await page.locator('.hov').textContent())?.split('·')[1]?.trim();
+  };
+  const a = await label(40, 15);
+  const b = await label(70, 15);
+  expect(a).not.toBe(b);
+
+  await page.getByRole('button', { name: 'Échanger' }).click();
+  const p1 = await wallToScreen(page, 40, 15, WALL_H);
+  const p2 = await wallToScreen(page, 70, 15, WALL_H);
+  await page.mouse.click(p1.x, p1.y);
+  await expect(page.getByTestId('swap-from')).toBeAttached();
+  await page.mouse.click(p2.x, p2.y);
+  await expect(page.getByTestId('swap-from')).toHaveCount(0);
+  expect(await label(40, 15)).toBe(b);
+  expect(await label(70, 15)).toBe(a);
+});
+
+test('harmonise la répartition sans changer la commande', async ({ page }) => {
+  await page.getByRole('button', { name: 'Commande' }).click();
+  const order = await page.getByTestId('to-order').textContent();
+  await page.locator('nav').getByRole('button', { name: 'Pans' }).click();
+
+  const note = async () => Number(/Harmonie (\d+)/.exec(await page.getByTestId('harmony').textContent() ?? '')?.[1]);
+  const before = await note();
+  await page.getByRole('button', { name: 'Harmoniser' }).click();
+  const cards = page.getByTestId('proposal');
+  await expect(cards).toHaveCount(4);
+  await expect(cards.first().locator('svg').first()).toBeVisible();
+  await cards.first().getByRole('button', { name: 'Choisir' }).click();
+
+  expect(await note()).toBeGreaterThan(before);
+  await page.getByRole('button', { name: 'Commande' }).click();
+  await expect(page.getByTestId('to-order')).toHaveText(order!);
+});
+
+test('surligne les défauts sur le plan et sur la photo', async ({ page }) => {
+  await page.getByRole('button', { name: 'Défauts' }).click();
+  await expect(page.locator('#stage [data-testid=defects]')).toBeAttached();
+  const photo = await pngFile(page, 'mur.png', 1200, 800, '#f4efe2');
+  await page.locator('aside input[type=file]').setInputFiles(photo);
+  await expect(page.locator('.ph-tiles [data-testid=defects]')).toBeAttached();
+});
+
 test('étire le contour de la zone', async ({ page }) => {
   const start = await tileCount(page);
   await page.getByRole('button', { name: 'Contour zone' }).click();

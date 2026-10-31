@@ -268,6 +268,51 @@ describe('découpe reçue sans photo', () => {
   });
 });
 
+describe('harmonie', () => {
+  it('affiche la note', () => {
+    setup();
+    expect(screen.getByTestId('harmony')).toHaveTextContent(/Harmonie \d+\/100/);
+  });
+
+  it('surligne les défauts à la demande', async () => {
+    const { user, container } = setup();
+    expect(container.querySelector('[data-testid=defects]')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Défauts' }));
+    expect(container.querySelector('[data-testid=defects]')).not.toBeNull();
+  });
+
+  it('propose plusieurs répartitions et applique le choix, annulable', async () => {
+    const { user } = setup();
+    const before = getProject();
+    await user.click(screen.getByRole('button', { name: 'Harmoniser' }));
+    const dialog = screen.getByRole('dialog', { name: 'Harmoniser la répartition' });
+    const cards = await within(dialog).findAllByTestId('proposal');
+    expect(cards).toHaveLength(4);
+    await user.click(within(cards[0]!).getByRole('button', { name: 'Choisir' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(getProject()).not.toBe(before);
+    expect(orderCounts(getProject(), getComps()).toOrder).toBe(orderCounts(before, getComps()).toOrder);
+    await user.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(getProject().walls[0]!.tiles).toEqual(before.walls[0]!.tiles);
+  });
+
+  it('se ferme avec Échap sans rien changer', async () => {
+    const { user } = setup();
+    const before = getProject();
+    await user.click(screen.getByRole('button', { name: 'Harmoniser' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(getProject()).toBe(before);
+  });
+
+  it('propose l\'outil Échanger en vue Plan et Photo', async () => {
+    const { user } = setup();
+    expect(screen.getByRole('button', { name: 'Échanger' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Photo' }));
+    expect(screen.getByRole('button', { name: 'Échanger' })).toBeInTheDocument();
+  });
+});
+
 describe('édition d\'un pan', () => {
   it('recalcule en changeant une dimension', async () => {
     const { user } = setup();

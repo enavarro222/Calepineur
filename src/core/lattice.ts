@@ -90,7 +90,12 @@ function hexLattice(tile: TileSpec) {
     };
   }
 
-  return { F, j, R, d, flat, base, px, py, area: SQ3 / 2 * F * F, center, verts, nearest, neighbors, range };
+  // Directions des alignements : vers les voisins directs, et entre deux carreaux décalés d'un rang.
+  const axis = (deg: number): Point => [Math.cos(deg * Math.PI / 180), Math.sin(deg * Math.PI / 180)];
+  const nearAxes = (flat ? [30, 90, 150] : [0, 60, 120]).map(axis);
+  const farAxes = (flat ? [0, 60, 120] : [30, 90, 150]).map(axis);
+
+  return { F, j, R, d, flat, base, px, py, area: SQ3 / 2 * F * F, center, verts, nearest, neighbors, range, nearAxes, farAxes };
 }
 
 export const latticeFor = (tile: TileSpec): Lattice => hexLattice(tile);

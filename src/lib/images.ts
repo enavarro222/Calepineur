@@ -54,3 +54,23 @@ export function cropImage(url: string, crop: DesignCrop, maxSide: number): Promi
     im.src = url;
   });
 }
+
+// Couleur moyenne d'une image : sert de teinte du motif pour l'équilibre clair/sombre.
+export function averageColor(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onerror = () => reject(new Error('image illisible'));
+    im.onload = () => {
+      const cv = document.createElement('canvas');
+      cv.width = 16;
+      cv.height = 16;
+      const g = cv.getContext('2d')!;
+      g.drawImage(im, 0, 0, 16, 16);
+      const px = g.getImageData(0, 0, 16, 16).data;
+      const sum = [0, 0, 0];
+      for (let i = 0; i < px.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += px[i + k]!;
+      resolve('#' + sum.map(v => Math.round(v / (px.length / 4)).toString(16).padStart(2, '0')).join(''));
+    };
+    im.src = url;
+  });
+}

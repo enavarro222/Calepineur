@@ -9,7 +9,7 @@ import type { ImageStore } from '../core/project';
 import type { Project } from '../core/types';
 import { readSaved } from './persistence';
 
-export type Tool = 'paint' | 'rotate' | 'toggle' | 'zone' | 'obst' | 'grid' | 'calib';
+export type Tool = 'paint' | 'rotate' | 'swap' | 'toggle' | 'zone' | 'obst' | 'grid' | 'calib';
 export type View = 'plan' | 'photo';
 
 export interface UiState {
@@ -22,6 +22,9 @@ export interface UiState {
   lastWall: number; // pan rouvert par l'onglet Pans
   aiOpen: boolean;
   pending: Project | null; // configuration reçue par lien, en attente de validation
+  defects: boolean;
+  harmonyOpen: boolean;
+  swapFrom: { wallId: string; key: string } | null; // premier carreau choisi avec l'outil Échanger
 }
 
 export interface AppState {
@@ -64,7 +67,7 @@ function initialState(): AppState {
   const saved = readSaved();
   const base = saved?.project ?? demoProject();
   const { project, comps } = settle(base);
-  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false, pending: null }, project);
+  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false, pending: null, defects: false, harmonyOpen: false, swapFrom: null }, project);
   return { project, comps, images: saved?.images ?? {}, past: [], future: [], ui, toast: null };
 }
 

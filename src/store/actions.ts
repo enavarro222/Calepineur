@@ -3,13 +3,14 @@ import { demoProject } from '../core/demo';
 import { computeWalls } from '../core/compute';
 import { pruneTiles, shuffleDesigns } from '../core/designs';
 import { cm } from '../core/format';
+import { applyAssignment, type Assignment } from '../core/harmony';
 import { colLetters, round1 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import { optimizeGrid } from '../core/optimize';
 import { calibPoints } from '../core/photo';
 import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
 import type { Project, Wall } from '../core/types';
-import { cropImage, imageSize, readImageFile } from '../lib/images';
+import { averageColor, cropImage, imageSize, readImageFile } from '../lib/images';
 import { removeUnusedImages, writeImage } from './persistence';
 import { commit, getComps, getProject, mutate, replaceProject, setUi, showToast, useStore } from './store';
 
@@ -19,6 +20,12 @@ export function shuffle(keepLocked: boolean): void {
     shuffleDesigns(p, getComps(), keepLocked);
     pruneTiles(p, getComps());
   });
+}
+
+export function chooseProposal(assignment: Assignment): void {
+  commit(p => applyAssignment(p, assignment));
+  setUi({ harmonyOpen: false });
+  showToast('Répartition appliquée. Les quantités à commander ne changent pas.');
 }
 
 export function optimize(i: number, both: boolean): void {
@@ -163,8 +170,12 @@ export function removePhoto(i: number): void {
 export async function uploadDesignImage(k: number, file: File): Promise<void> {
   try {
     const r = await readImageFile(file, 400);
+    const color = await averageColor(r.url);
     const ref = storeImage(r.url);
-    commit(p => { p.designs[k]!.img = ref; });
+    commit(p => {
+      p.designs[k]!.img = ref;
+      p.designs[k]!.color = color;
+    });
   } catch (e) {
     fileError(e);
   }
@@ -177,12 +188,16 @@ export async function cutDesignsFromPhoto(file: File): Promise<void> {
   try {
     const sheet = await readImageFile(file, SHEET_MAX_SIDE);
     const todo = getProject().designs.filter(d => d.crop);
-    const cut = await Promise.all(todo.map(async d => [d.key, storeImage(await cropImage(sheet.url, d.crop!, MOTIF_MAX_SIDE))] as const));
+    const cut = await Promise.all(todo.map(async d => {
+      const url = await cropImage(sheet.url, d.crop!, MOTIF_MAX_SIDE);
+      return { key: d.key, color: await averageColor(url), ref: storeImage(url) };
+    }));
     commit(p => {
-      for (const [key, ref] of cut) {
+      for (const { key, color, ref } of cut) {
         const d = p.designs.find(x => x.key === key);
         if (!d) continue;
         d.img = ref;
+        d.color = color;
         delete d.crop;
       }
     });
