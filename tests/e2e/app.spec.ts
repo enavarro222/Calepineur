@@ -164,6 +164,37 @@ test.describe('vue Photo', () => {
   });
 });
 
+test('sépare les murs du reste du menu et en ajoute un', async ({ page }) => {
+  await expect(page.locator('nav').getByRole('button', { name: 'Mur fenêtre' })).toHaveCount(0);
+  await page.getByRole('button', { name: '+ Ajouter un pan' }).click();
+  await expect(page.getByRole('button', { name: 'Pan 3' })).toHaveClass('on');
+  await page.getByRole('button', { name: 'Supprimer ce pan' }).click({ trial: true });
+  page.once('dialog', d => d.accept());
+  await page.getByRole('button', { name: 'Supprimer ce pan' }).click();
+  await expect(page.getByRole('button', { name: 'Pan 3' })).toHaveCount(0);
+});
+
+test('prépare un projet avec une IA, de la consigne à la réponse collée', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Configurer avec mon IA' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Préparer avec une IA' });
+  await expect(dialog.getByRole('link', { name: 'Claude' })).toHaveAttribute('href', /^https:\/\/claude\.ai\/new\?q=/);
+
+  await dialog.getByRole('button', { name: 'Copier la consigne' }).click();
+  const prompt = await page.evaluate(() => navigator.clipboard.readText());
+  expect(prompt).toContain('"version": 1');
+
+  const example = /\{\n {2}"version"[\s\S]*?\n\}/.exec(prompt)![0];
+  await dialog.getByLabel('Réponse de ton IA').fill(`Voici :\n\n\`\`\`json\n${example}\n\`\`\`\n\nCotes estimées : la largeur.`);
+  await dialog.getByRole('button', { name: 'Vérifier' }).click();
+  await expect(dialog.getByText('Mur évier : 240 × 75 cm, 1 élément')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Appliquer' }).click();
+
+  await expect(page.getByRole('button', { name: 'Mur évier' })).toHaveClass('on');
+  expect(await tileCount(page)).toBeGreaterThan(20);
+  await expect(page.getByRole('button', { name: 'Configurer avec mon IA' })).toHaveCount(0);
+});
+
 test('ouvre directement une vue par son adresse', async ({ page }) => {
   await page.goto('./#wall:1/plan/grid/labels');
   await page.reload();

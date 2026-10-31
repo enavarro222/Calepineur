@@ -1,5 +1,5 @@
 // Tests d'intégration : l'application entière, rendue et manipulée comme par un utilisateur.
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -38,6 +38,132 @@ describe('démarrage', () => {
     for (const name of ['Mur cuisson', 'Carreaux & motifs', 'Commande', 'Calepinage']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
+  });
+});
+
+describe('navigation', () => {
+  it('sépare les murs des étapes du projet', () => {
+    setup();
+    const nav = screen.getByRole('navigation');
+    expect(within(nav).getByRole('button', { name: 'Pans' })).toHaveClass('on');
+    expect(within(nav).queryByRole('button', { name: 'Mur fenêtre' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mur fenêtre' })).toHaveClass('on');
+  });
+
+  it('n\'affiche les murs que sur l\'onglet Pans', async () => {
+    const { tab } = setup();
+    await tab('Commande');
+    expect(screen.queryByRole('button', { name: '+ Ajouter un pan' })).toBeNull();
+    await tab('Pans');
+    expect(screen.getByRole('button', { name: '+ Ajouter un pan' })).toBeInTheDocument();
+  });
+
+  it('rouvre le dernier mur consulté', async () => {
+    const { tab } = setup();
+    await tab('Mur cuisson');
+    await tab('Commande');
+    await tab('Pans');
+    expect(screen.getByRole('button', { name: 'Mur cuisson' })).toHaveClass('on');
+  });
+
+  it('ajoute un mur et l\'ouvre', async () => {
+    const { tab } = setup();
+    await tab('+ Ajouter un pan');
+    expect(screen.getByRole('button', { name: 'Pan 3' })).toHaveClass('on');
+    expect(screen.getByLabelText('Nom')).toHaveValue('Pan 3');
+  });
+
+  it('crée un premier mur depuis un projet sans mur', async () => {
+    replaceProject(project({ walls: [] }));
+    const { tab } = setup();
+    await tab('Pans');
+    expect(screen.getByLabelText('Nom')).toHaveValue('Pan 1');
+  });
+});
+
+describe('préparation avec une IA', () => {
+  const open = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'Préparer avec une IA' }));
+    return screen.getByRole('dialog', { name: 'Préparer avec une IA' });
+  };
+  const reply = '```json\n' + JSON.stringify(project({ name: 'Par IA', walls: [wall({ id: 'ia-1', name: 'Mur IA' })] })) + '\n```';
+
+  it('invite à configurer le projet d\'exemple, une seule fois', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: "Fermer l'invitation" }));
+    expect(screen.queryByRole('button', { name: 'Configurer avec mon IA' })).toBeNull();
+    cleanup();
+    setup();
+    expect(screen.queryByRole('button', { name: 'Configurer avec mon IA' })).toBeNull();
+  });
+
+  it('n\'invite plus une fois le projet personnalisé', () => {
+    replaceProject(project());
+    setup();
+    expect(screen.queryByRole('button', { name: 'Configurer avec mon IA' })).toBeNull();
+  });
+
+  it('propose des liens avec la consigne', async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    const claude = within(dialog).getByRole('link', { name: 'Claude' });
+    expect(claude.getAttribute('href')).toMatch(/^https:\/\/claude\.ai\/new\?q=Tu%20m'aides/);
+    expect(claude).toHaveAttribute('target', '_blank');
+    expect(claude).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(within(dialog).getByRole('link', { name: 'ChatGPT' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Gemini' })).toHaveAttribute('href', 'https://gemini.google.com/app');
+  });
+
+  it('copie la consigne', async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Copier la consigne' }));
+    expect(await navigator.clipboard.readText()).toMatch(/^Tu m'aides/);
+    expect(screen.getByRole('status')).toHaveTextContent('Consigne copiée.');
+  });
+
+  it('part du projet actuel à la demande', async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    const prompt = within(dialog).getByLabelText('Consigne');
+    expect((prompt as HTMLTextAreaElement).value).not.toContain('Mur fenêtre');
+    await user.click(within(dialog).getByLabelText(/Partir de mon projet actuel/));
+    expect((prompt as HTMLTextAreaElement).value).toContain('Mur fenêtre');
+  });
+
+  it('résume la réponse puis l\'applique, de façon annulable', async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    await user.click(within(dialog).getByLabelText('Réponse de ton IA'));
+    await user.paste(reply);
+    await user.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).getByText('Mur IA : 100 × 60 cm, 0 élément')).toBeInTheDocument();
+    expect(getProject().name).not.toBe('Par IA');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Appliquer' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mur IA' })).toHaveClass('on');
+
+    await user.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(screen.getByRole('button', { name: 'Mur fenêtre' })).toBeInTheDocument();
+  });
+
+  it('explique une réponse invalide sans toucher au projet', async () => {
+    const { user } = setup();
+    const before = getProject();
+    const dialog = await open(user);
+    await user.click(within(dialog).getByLabelText('Réponse de ton IA'));
+    await user.paste('Désolé, je ne peux pas.');
+    await user.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('aucun JSON');
+    expect(getProject()).toBe(before);
+  });
+
+  it('se ferme avec Échap', async () => {
+    const { user } = setup();
+    await open(user);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 

@@ -162,3 +162,25 @@ label.btn { margin: 0; display: inline-flex; color: var(--ink); font-size: 14px;
 table.designs { table-layout: auto; }
 table.designs td input:not(.key):not(.w):not([type=color]) { width: 100%; min-width: 70px; }
 table.designs td:nth-child(3) { width: 100%; }
+
+/* ---- navigation : les murs d'un côté, les étapes du projet de l'autre ---- */
+#wall-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 14px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
+.wall-tabs-label { font-size: 12px; font-weight: 600; color: var(--accent); margin-right: 8px; }
+#wall-tabs button { border: 1px solid transparent; background: none; padding: 4px 10px; color: var(--ink); }
+#wall-tabs button.on { background: #fff; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+#wall-tabs button.add { color: var(--accent); font-weight: 600; border: 1px dashed var(--accent); margin-left: 6px; }
+#ai-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 7px 14px; background: #fbf3dc; border-bottom: 1px solid var(--line); font-size: 13px; }
+#ai-invite span { flex: 1; min-width: 240px; }
+
+/* ---- fenêtre IA ---- */
+.dialog-back { position: fixed; inset: 0; background: rgba(35,38,43,.45); display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; overflow: auto; z-index: 5; }
+.dialog { position: relative; width: 100%; max-width: 640px; background: var(--panel); border-radius: var(--radius); padding: 16px 22px 22px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+.dialog h2 { margin: 2px 0 6px; font-size: 18px; }
+.dialog h3 { margin: 16px 0 4px; font-size: 14px; color: var(--accent); }
+.dialog-close { position: absolute; top: 12px; right: 12px; }
+.dialog a.btn { text-decoration: none; }
+.dialog details { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.dialog details textarea { margin-top: 4px; }
+.ai-summary { margin-top: 10px; padding: 10px 14px; background: var(--accent-soft); border-radius: var(--radius); }
+.ai-summary h4 { margin: 0 0 4px; }
+.ai-summary ul { margin: 0 0 8px; padding-left: 18px; }

@@ -5,6 +5,24 @@ import type { Project } from '../core/types';
 export const LS_KEY = 'calepineur.state.v1';
 export const LS_IMG = 'calepineur.img.';
 
+const LS_INVITE = 'calepineur.invite.closed';
+
+export function inviteClosed(): boolean {
+  try {
+    return localStorage.getItem(LS_INVITE) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function closeInvite(): void {
+  try {
+    localStorage.setItem(LS_INVITE, '1');
+  } catch {
+    // stockage indisponible : l'invitation reviendra au prochain chargement
+  }
+}
+
 export function readSaved(): { project: Project; images: ImageStore } | null {
   try {
     const text = localStorage.getItem(LS_KEY);

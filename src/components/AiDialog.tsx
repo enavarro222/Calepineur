@@ -1,0 +1,94 @@
+// Préparer un projet avec une IA de discussion : consigne à emporter, réponse à coller.
+import { useEffect, useMemo, useState } from 'react';
+import { aiTargets, buildPrompt } from '../core/aiPrompt';
+import { parseAiReply, summarizeProject } from '../core/aiReply';
+import { applyAiProject, copyText } from '../store/actions';
+import { setUi, showToast, useStore } from '../store/store';
+import type { Project } from '../core/types';
+
+const close = () => setUi({ aiOpen: false });
+
+function PasteReply() {
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [parsed, setParsed] = useState<Project | null>(null);
+
+  const check = () => {
+    setParsed(null);
+    try {
+      setParsed(parseAiReply(text));
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <>
+      <label>
+        Réponse de ton IA
+        <textarea rows={6} spellCheck={false} value={text} onChange={e => { setText(e.target.value); setParsed(null); setError(''); }} />
+      </label>
+      {error && <p className="warn" role="alert">{error}</p>}
+      {!parsed && <button disabled={!text.trim()} onClick={check}>Vérifier</button>}
+      {parsed && (
+        <div className="ai-summary">
+          <h4>À appliquer</h4>
+          <ul>{summarizeProject(parsed).map(l => <li key={l}>{l}</li>)}</ul>
+          <p className="hint">Le projet en cours sera remplacé. Tu peux revenir en arrière avec ↶.</p>
+          <button className="primary" onClick={() => applyAiProject(parsed)}>Appliquer</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function AiDialog() {
+  const project = useStore(s => s.project);
+  const isDemo = project.walls.every(w => w.id.startsWith('demo-'));
+  const [fromCurrent, setFromCurrent] = useState(!isDemo);
+  const prompt = useMemo(() => buildPrompt(fromCurrent ? project : null), [fromCurrent, project]);
+  const targets = useMemo(() => aiTargets(prompt), [prompt]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const copy = async () => {
+    if (await copyText(prompt)) showToast('Consigne copiée.');
+  };
+
+  return (
+    <div className="dialog-back app-chrome" onClick={e => { if (e.target === e.currentTarget) close(); }}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="ai-title">
+        <button className="icon dialog-close" aria-label="Fermer" onClick={close}>×</button>
+        <h2 id="ai-title">Préparer avec une IA</h2>
+        <p className="hint">Ton IA lit tes photos et ta référence de carreaux, puis prépare les murs, les éléments et la zone. Ses cotes restent des estimations à vérifier au mètre.</p>
+
+        <h3>1. Ouvre ton IA</h3>
+        <div className="btns">
+          {targets.map(t => (
+            <a key={t.name} className="btn" href={t.url} target="_blank" rel="noopener noreferrer" onClick={() => void copyText(prompt)}>{t.name}</a>
+          ))}
+          <button onClick={() => void copy()}>Copier la consigne</button>
+        </div>
+        <p className="hint">Chaque bouton copie aussi la consigne. Si elle n'apparaît pas toute seule dans ton IA, colle-la. Pour une autre IA, utilise <b>Copier la consigne</b>.</p>
+        <label className="inline">
+          <input type="checkbox" checked={fromCurrent} onChange={e => setFromCurrent(e.target.checked)} /> Partir de mon projet actuel (dimensions et noms, sans les images)
+        </label>
+        <details>
+          <summary>Voir la consigne</summary>
+          <textarea aria-label="Consigne" rows={8} readOnly value={prompt} />
+        </details>
+
+        <h3>2. Ajoute tes photos dans la discussion</h3>
+        <p className="hint">Joins une photo de chaque mur et la référence des carreaux. Aucun lien ne peut le faire à ta place. Tes images restent entre toi et ton IA : Calepineur ne les envoie pas.</p>
+
+        <h3>3. Colle sa réponse ici</h3>
+        <PasteReply />
+      </div>
+    </div>
+  );
+}

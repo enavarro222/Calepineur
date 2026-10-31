@@ -19,6 +19,8 @@ export interface UiState {
   design: string | null;
   labels: boolean;
   cuts: boolean;
+  lastWall: number; // pan rouvert par l'onglet Pans
+  aiOpen: boolean;
 }
 
 export interface AppState {
@@ -47,6 +49,8 @@ export function fixUi(ui: UiState, project: Project): UiState {
   const next = { ...ui };
   if (next.tab.startsWith('wall') && !project.walls[wallIndex(next)]) next.tab = project.walls.length ? 'wall:0' : 'tiles';
   if (!next.design || !project.designs.some(d => d.key === next.design)) next.design = project.designs[0]?.key ?? null;
+  const wall = wallIndex(next);
+  next.lastWall = wall >= 0 ? wall : Math.min(next.lastWall, Math.max(project.walls.length - 1, 0));
   return next;
 }
 
@@ -59,7 +63,7 @@ function initialState(): AppState {
   const saved = readSaved();
   const base = saved?.project ?? demoProject();
   const { project, comps } = settle(base);
-  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true }, project);
+  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false }, project);
   return { project, comps, images: saved?.images ?? {}, past: [], future: [], ui, toast: null };
 }
 

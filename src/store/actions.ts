@@ -1,4 +1,5 @@
 // Actions de l'interface qui ne se limitent pas à changer une valeur.
+import { mergeAiProject } from '../core/aiReply';
 import { demoProject } from '../core/demo';
 import { computeWalls } from '../core/compute';
 import { pruneTiles, shuffleDesigns } from '../core/designs';
@@ -176,6 +177,22 @@ export async function importFile(file: File): Promise<void> {
       : 'Projet importé.', missing ? 8000 : 3500);
   } catch (e) {
     fileError(e);
+  }
+}
+
+export function applyAiProject(next: Project): void {
+  replaceProject(mergeAiProject(getProject(), next));
+  setUi({ tab: 'wall:0', aiOpen: false });
+  showToast('Projet appliqué. Ajoute tes photos et tes motifs, puis vérifie les cotes au mètre.', 6000);
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    showToast('Copie impossible : sélectionne le texte de la consigne et copie-le.');
+    return false;
   }
 }
 
