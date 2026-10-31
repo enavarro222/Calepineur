@@ -1,0 +1,192 @@
+import { readFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
+import { dragOnWall, expectNoErrors, failOnConsoleErrors, pngFile, tileCount, wallToScreen } from './helpers';
+
+const WALL_H = 75; // hauteur du premier pan de l'exemple
+
+let errors: string[];
+
+test.beforeEach(async ({ page }) => {
+  errors = failOnConsoleErrors(page);
+  await page.goto('./');
+  await expect(page.getByTestId('stats')).toBeVisible();
+});
+
+test.afterEach(async () => {
+  await expectNoErrors(errors);
+});
+
+test('ouvre le projet d\'exemple', async ({ page }) => {
+  await expect(page).toHaveTitle('Calepineur');
+  await expect(page.getByRole('button', { name: 'Mur fenêtre' })).toHaveClass('on');
+  expect(await tileCount(page)).toBeGreaterThan(50);
+  await expect(page.locator('#stage image, #stage use').first()).toBeAttached();
+});
+
+test('peint un carreau à la souris, puis annule', async ({ page }) => {
+  await page.keyboard.press('3');
+  const p = await wallToScreen(page, 60, 15, WALL_H);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.click(p.x, p.y);
+  await page.mouse.move(p.x + 1, p.y);
+  await expect(page.locator('.hov')).toContainText('· C Pétales');
+
+  await page.keyboard.press('Control+z');
+  await page.mouse.move(p.x, p.y);
+  await expect(page.getByRole('button', { name: 'Annuler' })).toBeDisabled();
+});
+
+test('retouche la zone au pinceau', async ({ page }) => {
+  const start = await tileCount(page);
+  await page.getByRole('button', { name: 'Pinceau zone' }).click();
+
+  await dragOnWall(page, [20, 68], [70, 68], WALL_H);
+  const added = await tileCount(page);
+  expect(added).toBeGreaterThan(start);
+  await expect(page.getByRole('button', { name: /Effacer les retouches/ })).toBeVisible();
+
+  await dragOnWall(page, [20, 15], [70, 15], WALL_H);
+  const removed = await tileCount(page);
+  expect(removed).toBeLessThan(added);
+
+  const p = await wallToScreen(page, 40, 30, WALL_H);
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  expect(await tileCount(page)).toBe(removed - 1);
+
+  await page.getByRole('button', { name: /Effacer les retouches/ }).click();
+  expect(await tileCount(page)).toBe(start);
+});
+
+test('étire le contour de la zone', async ({ page }) => {
+  const start = await tileCount(page);
+  await page.getByRole('button', { name: 'Contour zone' }).click();
+  await dragOnWall(page, [120, 58], [120, 74], WALL_H);
+  await expect(page.locator('[data-handle=zone]')).toHaveCount(5);
+  expect(await tileCount(page)).toBeGreaterThan(start);
+  await page.getByRole('button', { name: 'Annuler' }).click();
+  await expect(page.locator('[data-handle=zone]')).toHaveCount(4);
+  expect(await tileCount(page)).toBe(start);
+});
+
+test('déplace un élément à la souris', async ({ page }) => {
+  await page.getByRole('button', { name: 'Éléments' }).click();
+  await dragOnWall(page, [208, 30], [228, 40], WALL_H);
+  await expect(page.getByLabel('x de Prise')).not.toHaveValue('200');
+});
+
+test('garde le travail après un rechargement immédiat', async ({ page }) => {
+  await page.getByLabel('Nom', { exact: true }).fill('Mur renommé');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Mur renommé' })).toBeVisible();
+});
+
+test('restitue un projet exporté, images comprises', async ({ page }) => {
+  await page.getByRole('button', { name: 'Carreaux & motifs' }).click();
+  const image = await pngFile(page, 'motif.png', 80, 70, '#ff0000');
+  await page.locator('table.designs input[type=file]').first().setInputFiles(image);
+  await expect(page.locator('table.designs .hexsw').first()).toHaveCSS('background-image', /data:image\/jpeg/);
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exporter' }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^calepineur-\d{4}-\d\d-\d\d\.json$/);
+  const path = await file.path();
+
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole('button', { name: 'Carreaux & motifs' }).click();
+  await expect(page.locator('table.designs .hexsw').first()).not.toHaveCSS('background-image', /jpeg/);
+
+  await page.locator('header input[type=file]').setInputFiles(path);
+  await expect(page.getByRole('status')).toHaveText('Projet importé.');
+  await page.getByRole('button', { name: 'Carreaux & motifs' }).click();
+  await expect(page.locator('table.designs .hexsw').first()).toHaveCSS('background-image', /data:image\/jpeg/);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Carreaux & motifs' }).click();
+  await expect(page.locator('table.designs .hexsw').first()).toHaveCSS('background-image', /data:image\/jpeg/);
+});
+
+test('ouvre un export de la première version et signale ses images', async ({ page }) => {
+  const project = {
+    version: 1, name: 'Ancien', rotMode: 'none', seed: 7,
+    tile: { F: 14, joint: 0.2, orient: 'flat', grout: '#d8d3c8', edgeGap: 0.2, waste: 10, minPiece: 15, perBox: 0, m2PerBox: 0 },
+    designs: [{ key: 'A', name: 'Ancien motif', img: 'motifs/a.jpg', color: '#a3906f', weight: 1 }],
+    walls: [{ id: 'A', name: 'Ancien pan', W: 160, H: 100, color: '#efe6d2', ox: 8, oy: 7, zoneMode: 'organic', zone: [[-10, -10], [-10, 40], [170, 40], [170, -10]], obstacles: [], photo: null, tiles: {} }],
+  };
+  await page.locator('header input[type=file]').setInputFiles({
+    name: 'ancien.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ state: project, images: {} })),
+  });
+  await expect(page.getByRole('status')).toContainText('1 image absente du fichier');
+  await expect(page.getByRole('button', { name: 'Ancien pan' })).toBeVisible();
+  expect(await tileCount(page)).toBeGreaterThan(10);
+});
+
+test.describe('vue Photo', () => {
+  test.beforeEach(async ({ page }) => {
+    const photo = await pngFile(page, 'mur.png', 1200, 800, '#f4efe2');
+    await page.locator('aside input[type=file]').setInputFiles(photo);
+    await expect(page.locator('.ph-tiles svg')).toBeAttached();
+  });
+
+  test('cale la photo sur 4 repères', async ({ page }) => {
+    await expect(page.locator('[data-handle=calib]')).toHaveCount(4);
+    await expect(page.locator('.ph-tiles')).toHaveCSS('transform', /^matrix/);
+    const before = await page.locator('.ph-tiles').evaluate(e => getComputedStyle(e).transform);
+
+    const handle = await page.locator('[data-handle=calib]').first().boundingBox();
+    const x = handle!.x + handle!.width / 2;
+    const y = handle!.y + handle!.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 40, y + 20, { steps: 4 });
+    await page.mouse.up();
+
+    await expect.poll(() => page.locator('.ph-tiles').evaluate(e => getComputedStyle(e).transform)).not.toBe(before);
+  });
+
+  test('retouche la zone directement sur la photo', async ({ page }) => {
+    await page.getByRole('button', { name: 'Pinceau zone' }).click();
+    const start = await tileCount(page);
+    const img = (await page.locator('.ph-img').boundingBox())!;
+    await page.mouse.move(img.x + img.width * .5, img.y + img.height * .62);
+    await page.mouse.down();
+    await page.mouse.move(img.x + img.width * .6, img.y + img.height * .62, { steps: 5 });
+    await page.mouse.up();
+    expect(await tileCount(page)).toBeLessThan(start);
+  });
+
+  test('retrouve la photo après rechargement', async ({ page }) => {
+    await page.reload();
+    await page.getByRole('button', { name: 'Photo', exact: true }).click();
+    await expect(page.locator('.ph-img')).toBeVisible();
+    await expect(page.locator('.ph-tiles')).toHaveCSS('transform', /^matrix/);
+  });
+});
+
+test('ouvre directement une vue par son adresse', async ({ page }) => {
+  await page.goto('./#wall:1/plan/grid/labels');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Mur cuisson' })).toHaveClass('on');
+  await expect(page.getByRole('button', { name: 'Grille' })).toHaveClass('on');
+  await expect(page.locator('.lbl').first()).toBeAttached();
+});
+
+test('prépare le document d\'impression', async ({ page }) => {
+  await page.getByRole('button', { name: 'Calepinage' }).click();
+  await expect(page.locator('#doc h1')).toContainText('calepinage');
+  await expect(page.locator('figure.cut').first()).toBeVisible();
+
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('header')).toBeHidden();
+  await expect(page.locator('.print-bar')).toBeHidden();
+  await expect(page.locator('#doc')).toBeVisible();
+  const pdf = await page.pdf({ format: 'A4', landscape: true, preferCSSPageSize: true });
+  expect(pdf.length).toBeGreaterThan(10_000);
+});
+
+test('le site reste chargeable depuis un sous-dossier', () => {
+  const html = readFileSync('dist/index.html', 'utf8');
+  expect(html).toMatch(/src="\.\/assets\//);
+  expect(html).not.toMatch(/(src|href)="\/[^/]/);
+});
