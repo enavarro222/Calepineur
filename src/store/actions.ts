@@ -1,5 +1,4 @@
 // Actions de l'interface qui ne se limitent pas à changer une valeur.
-import { mergeAiProject } from '../core/aiReply';
 import { demoProject } from '../core/demo';
 import { computeWalls } from '../core/compute';
 import { pruneTiles, shuffleDesigns } from '../core/designs';
@@ -180,10 +179,10 @@ export async function importFile(file: File): Promise<void> {
   }
 }
 
-export function applyAiProject(next: Project): void {
-  replaceProject(mergeAiProject(getProject(), next));
-  setUi({ tab: 'wall:0', aiOpen: false });
-  showToast('Projet appliqué. Ajoute tes photos et tes motifs, puis vérifie les cotes au mètre.', 6000);
+export function applyConfig(next: Project): void {
+  replaceProject(next);
+  setUi({ tab: 'wall:0', aiOpen: false, pending: null });
+  showToast('Modifications appliquées. Vérifie les cotes au mètre.', 6000);
 }
 
 export async function copyText(text: string): Promise<boolean> {

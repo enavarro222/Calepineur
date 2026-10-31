@@ -6,6 +6,7 @@ import './styles.css';
 
 applyHash(location.hash);
 installPersistence();
+window.addEventListener('hashchange', () => applyHash(location.hash));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

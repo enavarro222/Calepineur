@@ -187,12 +187,49 @@ test('prépare un projet avec une IA, de la consigne à la réponse collée', as
   const example = /\{\n {2}"version"[\s\S]*?\n\}/.exec(prompt)![0];
   await dialog.getByLabel('Réponse de ton IA').fill(`Voici :\n\n\`\`\`json\n${example}\n\`\`\`\n\nCotes estimées : la largeur.`);
   await dialog.getByRole('button', { name: 'Vérifier' }).click();
-  await expect(dialog.getByText('Mur évier : 240 × 75 cm, 1 élément')).toBeVisible();
+  await expect(dialog.getByText('Nouveau pan : Mur évier, 240 × 75 cm, 1 élément')).toBeVisible();
   await dialog.getByRole('button', { name: 'Appliquer' }).click();
 
   await expect(page.getByRole('button', { name: 'Mur évier' })).toHaveClass('on');
   expect(await tileCount(page)).toBeGreaterThan(20);
   await expect(page.getByRole('button', { name: 'Configurer avec mon IA' })).toHaveCount(0);
+});
+
+test('applique un lien de configuration après validation, une seule fois', async ({ page }) => {
+  const config = { tile: { F: 15 }, walls: [{ name: 'Mur fenêtre', W: 200 }, { id: 'ilot', name: 'Îlot', W: 120, H: 40 }] };
+  const start = await tileCount(page);
+
+  // page déjà ouverte, puis lien cliqué
+  await page.goto(`./#config=${encodeURIComponent(JSON.stringify(config))}`);
+  const dialog = page.getByRole('dialog', { name: 'Appliquer ce lien de configuration ?' });
+  await expect(dialog.getByText('Carreau de 15 cm (avant : 12)')).toBeVisible();
+  await expect(dialog.getByText('Nouveau pan : Îlot, 120 × 40 cm, 0 élément')).toBeVisible();
+  expect(await tileCount(page)).toBe(start);
+  expect(page.url()).not.toContain('config');
+
+  await dialog.getByRole('button', { name: 'Appliquer' }).click();
+  await expect(page.getByRole('button', { name: 'Îlot' })).toBeVisible();
+  expect(await tileCount(page)).not.toBe(start);
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Îlot' })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('propose un lien reçu à l\'ouverture de l\'application', async ({ browser }) => {
+  const page = await (await browser.newContext({ baseURL: 'http://127.0.0.1:4173' })).newPage();
+  await page.goto(`./#config=${encodeURIComponent('{"tile":{"F":20}}')}`);
+  await expect(page.getByRole('dialog').getByText('Carreau de 20 cm (avant : 12)')).toBeVisible();
+  await page.context().close();
+});
+
+test('publie les instructions pour les IA', async ({ request }) => {
+  const res = await request.get('llms.txt');
+  expect(res.status()).toBe(200);
+  const text = await res.text();
+  expect(text).toContain('# Calepineur');
+  expect(text).toContain('#config=');
+  expect(text).toContain('"version": 1');
 });
 
 test('ouvre directement une vue par son adresse', async ({ page }) => {

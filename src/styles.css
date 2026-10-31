@@ -184,3 +184,5 @@ table.designs td:nth-child(3) { width: 100%; }
 .ai-summary { margin-top: 10px; padding: 10px 14px; background: var(--accent-soft); border-radius: var(--radius); }
 .ai-summary h4 { margin: 0 0 4px; }
 .ai-summary ul { margin: 0 0 8px; padding-left: 18px; }
+.guide-link { display: flex; gap: 6px; margin-top: 2px; }
+.guide-link input { flex: 1; }

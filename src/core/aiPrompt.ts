@@ -2,6 +2,7 @@
 import type { Project } from './types';
 
 export const APP_URL = 'https://enavarro222.github.io/Calepineur/';
+export const GUIDE_URL = `${APP_URL}llms.txt`;
 const MAX_LINK_LENGTH = 6000; // au-delà, certains navigateurs ou serveurs coupent l'adresse
 
 const FORMAT = `{
@@ -31,6 +32,18 @@ const RULES = `Règles :
 - "ox" et "oy" : centre d'un carreau de référence, proche du coin bas-gauche.
 - Laisse toujours "photo" à null et "tiles" vide.`;
 
+const PARTIAL = `Modification partielle : pour une correction, donne un JSON sans "version" qui contient seulement ce qui change. Seuls les champs présents sont modifiés.
+{ "tile": { "F": 15 }, "walls": [{ "id": "mur-1", "W": 250, "obstacles": [{ "name": "Hotte", "x": 110, "y": 68, "w": 80, "h": 27 }] }] }
+- Dans "walls", "id" (ou "name") désigne le mur à modifier. Un id inconnu ajoute un mur, avec au moins W et H. "remove": true retire le mur.
+- Dans "designs", "key" désigne le motif, avec la même logique.
+- "obstacles" et "zone" remplacent la liste entière du mur.`;
+
+const LINK = `Lien : tu peux aussi donner la configuration, complète ou partielle, sous forme d'un lien à cliquer :
+${APP_URL}#config=<JSON encodé>
+Encode le JSON comme encodeURIComponent, en encodant aussi les parenthèses (%28, %29) et l'apostrophe (%27). Exemple pour un carreau de 15 cm :
+${APP_URL}#config=%7B%22tile%22%3A%7B%22F%22%3A15%7D%7D
+L'application montre les changements et attend la validation de l'utilisateur. Au-delà de 4000 caractères, donne plutôt le bloc JSON, à coller dans la fenêtre « Préparer avec une IA ».`;
+
 // Le projet envoyé à l'IA ne contient ni image ni réglage carreau par carreau.
 function promptProject(project: Project): Project {
   return {
@@ -58,7 +71,29 @@ ${FORMAT}
 
 ${RULES}
 
-Après le bloc, liste les cotes que tu as estimées d'après les photos, pour que je les vérifie au mètre. Si je demande une correction, redonne le JSON complet. Je collerai ce JSON dans Calepineur.`;
+Après le bloc, liste les cotes que tu as estimées d'après les photos, pour que je les vérifie au mètre. Je collerai ce JSON dans Calepineur.
+
+${PARTIAL}
+
+${LINK}`;
+}
+
+// Fichier publié à la racine du site : tout ce qu'une IA doit savoir, à partir d'un simple lien.
+export function buildGuide(): string {
+  return `# Calepineur
+
+> Application web de calepinage de carreaux hexagonaux : ${APP_URL}
+> Elle fonctionne dans le navigateur, sans compte. Tu peux préparer une configuration pour ton interlocuteur.
+
+## Ce que tu dois faire
+
+${buildPrompt(null)}
+
+## Limites
+
+- Tu ne peux pas transmettre d'image : l'utilisateur charge ses photos et ses motifs dans l'application.
+- Les cotes déduites d'une photo sont des estimations. Dis-le toujours.
+`;
 }
 
 export interface AiTarget {

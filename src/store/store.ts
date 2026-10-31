@@ -21,6 +21,7 @@ export interface UiState {
   cuts: boolean;
   lastWall: number; // pan rouvert par l'onglet Pans
   aiOpen: boolean;
+  pending: Project | null; // configuration reçue par lien, en attente de validation
 }
 
 export interface AppState {
@@ -63,7 +64,7 @@ function initialState(): AppState {
   const saved = readSaved();
   const base = saved?.project ?? demoProject();
   const { project, comps } = settle(base);
-  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false }, project);
+  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false, pending: null }, project);
   return { project, comps, images: saved?.images ?? {}, past: [], future: [], ui, toast: null };
 }
 

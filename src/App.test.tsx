@@ -8,6 +8,7 @@ import { orderCounts } from './core/order';
 import { serializeProject } from './core/project';
 import { project, wall } from './test/fixtures';
 import { release } from './store/tools';
+import { applyHash } from './store/bootstrap';
 
 beforeEach(() => {
   release();
@@ -137,7 +138,7 @@ describe('préparation avec une IA', () => {
     await user.click(within(dialog).getByLabelText('Réponse de ton IA'));
     await user.paste(reply);
     await user.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
-    expect(within(dialog).getByText('Mur IA : 100 × 60 cm, 0 élément')).toBeInTheDocument();
+    expect(within(dialog).getByText('Nouveau pan : Mur IA, 100 × 60 cm, 0 élément')).toBeInTheDocument();
     expect(getProject().name).not.toBe('Par IA');
 
     await user.click(within(dialog).getByRole('button', { name: 'Appliquer' }));
@@ -159,11 +160,75 @@ describe('préparation avec une IA', () => {
     expect(getProject()).toBe(before);
   });
 
+  it('accepte une simple correction collée', async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    await user.click(within(dialog).getByLabelText('Réponse de ton IA'));
+    await user.paste('{"walls":[{"name":"Mur fenêtre","W":200}]}');
+    await user.click(within(dialog).getByRole('button', { name: 'Vérifier' }));
+    expect(within(dialog).getByText('Mur fenêtre : largeur 200 cm (avant : 240)')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Appliquer' }));
+    expect(getProject().walls[0]!.W).toBe(200);
+    expect(getProject().walls).toHaveLength(2);
+  });
+
+  it('donne le lien vers les instructions pour les IA', async () => {
+    const { user } = setup();
+    const dialog = await open(user);
+    expect(within(dialog).getByLabelText('Lien pour ton IA')).toHaveValue('https://enavarro222.github.io/Calepineur/llms.txt');
+  });
+
   it('se ferme avec Échap', async () => {
     const { user } = setup();
     await open(user);
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('lien de configuration', () => {
+  const link = (v: unknown) => `#config=${encodeURIComponent(JSON.stringify(v))}`;
+
+  it('attend la validation avant de changer quoi que ce soit', async () => {
+    const { user } = setup();
+    const before = getProject();
+    act(() => applyHash(link({ walls: [{ name: 'Mur fenêtre', W: 200 }] })));
+    const dialog = screen.getByRole('dialog', { name: 'Appliquer ce lien de configuration ?' });
+    expect(within(dialog).getByText('Mur fenêtre : largeur 200 cm (avant : 240)')).toBeInTheDocument();
+    expect(getProject()).toBe(before);
+    await user.click(within(dialog).getByRole('button', { name: 'Appliquer' }));
+    expect(getProject().walls[0]!.W).toBe(200);
+    await user.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(getProject().walls[0]!.W).toBe(240);
+  });
+
+  it('peut être ignoré', async () => {
+    const { user } = setup();
+    const before = getProject();
+    act(() => applyHash(link({ tile: { F: 20 } })));
+    await user.click(screen.getByRole('button', { name: 'Ignorer' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(getProject()).toBe(before);
+  });
+
+  it('retire la configuration de l\'adresse', () => {
+    location.hash = link({ tile: { F: 20 } });
+    setup();
+    act(() => applyHash(location.hash));
+    expect(location.hash).toBe('');
+  });
+
+  it('explique un lien invalide', () => {
+    setup();
+    act(() => applyHash('#config=%7Bcass%C3%A9'));
+    expect(screen.getByRole('status')).toHaveTextContent('Lien de configuration invalide');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('tolère un lien dont l\'encodage est abîmé', () => {
+    setup();
+    act(() => applyHash('#config={"tile":{"F":20},"name":"100%"}'));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Carreau de 20 cm');
   });
 });
 

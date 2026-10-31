@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AiDialog } from './components/AiDialog';
+import { AiDialog, ConfigReview } from './components/AiDialog';
 import { OrderPage } from './components/OrderPage';
 import { PrintPage } from './components/PrintPage';
 import { TilesPage } from './components/TilesPage';
@@ -99,6 +99,7 @@ function onKeyDown(e: KeyboardEvent): void {
 export function App() {
   const tab = useStore(s => s.ui.tab);
   const aiOpen = useStore(s => s.ui.aiOpen);
+  const pending = useStore(s => s.ui.pending);
 
   useEffect(() => {
     const toPrint = () => setUi({ tab: 'print' });
@@ -124,6 +125,7 @@ export function App() {
         {kind === 'print' && <PrintPage />}
       </main>
       {aiOpen && <AiDialog />}
+      {pending && <ConfigReview next={pending} />}
       <Toast />
     </>
   );

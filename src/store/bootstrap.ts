@@ -1,4 +1,5 @@
 // Branche la sauvegarde automatique et lit l'adresse d'ouverture.
+import { resolveConfig } from '../core/aiReply';
 import { writeProject } from './persistence';
 import { getProject, setUi, showToast, useStore, wallIndex, type Tool, type UiState, type View } from './store';
 
@@ -23,8 +24,31 @@ export function installPersistence(): () => void {
   };
 }
 
+const CONFIG_PREFIX = '#config=';
+
+// Un lien de configuration ne change rien tout seul : il est soumis à l'utilisateur, puis retiré de l'adresse.
+function openConfigLink(hash: string): void {
+  const encoded = hash.slice(CONFIG_PREFIX.length);
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    let text = encoded;
+    try {
+      text = decodeURIComponent(encoded);
+    } catch {
+      // l'IA a laissé des caractères non encodés : on tente le texte brut
+    }
+    setUi({ pending: resolveConfig(getProject(), text) });
+  } catch (e) {
+    showToast(`Lien de configuration invalide : ${e instanceof Error ? e.message : String(e)}`, 8000);
+  }
+}
+
 // #wall:1/photo/calib/labels : ouvre directement un onglet, une vue et un outil.
 export function applyHash(hash: string): void {
+  if (hash.startsWith(CONFIG_PREFIX)) {
+    openConfigLink(hash);
+    return;
+  }
   const parts = decodeURIComponent(hash.replace(/^#/, '')).split('/');
   const patch: Partial<UiState> = {};
   if (parts[0]) patch.tab = parts[0];
