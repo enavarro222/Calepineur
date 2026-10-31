@@ -1,0 +1,86 @@
+// Modèle d'un projet. Unités : cm, y vers le haut, origine au coin bas-gauche du pan.
+
+export type Point = [number, number];
+export type Ring = Point[];
+export type MultiPolygon = Ring[][];
+export type BBox = [number, number, number, number];
+
+export type Orient = 'flat' | 'pointy';
+export type RotMode = 'none' | '180' | '60';
+export type ZoneMode = 'organic' | 'cut';
+export type BrushState = 'add' | 'del';
+
+export interface TileSpec {
+  F: number; // largeur plat à plat
+  joint: number;
+  orient: Orient; // 'flat' = pointes sur les côtés, 'pointy' = pointes en haut
+  grout: string;
+  edgeGap: number; // retrait le long des bords durs (plan de travail, angle, fenêtre…)
+  waste: number; // % de casse
+  minPiece: number; // % sous lequel une coupe est signalée « petite »
+  perBox: number;
+  m2PerBox: number;
+}
+
+export interface Design {
+  key: string;
+  name: string;
+  img: string; // 'img:<id>' (image stockée), 'data:…' (intégrée) ou '' (couleur seule)
+  color: string;
+  weight: number;
+}
+
+export interface Obstacle {
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface CalibPoint {
+  wx: number;
+  wy: number;
+  px: number;
+  py: number;
+}
+
+export interface WallPhoto {
+  src: string;
+  opacity: number;
+  blend: boolean;
+  pts: CalibPoint[];
+}
+
+// Réglages d'un emplacement « q,r » : motif, rotation par 60°, verrou manuel, retouche au pinceau.
+export interface TileOverride {
+  d?: string | null;
+  rot?: number;
+  lk?: boolean;
+  st?: BrushState;
+}
+
+export interface Wall {
+  id: string;
+  name: string;
+  W: number;
+  H: number;
+  color: string;
+  ox: number;
+  oy: number;
+  zoneMode: ZoneMode;
+  zone: Point[];
+  obstacles: Obstacle[];
+  photo: WallPhoto | null;
+  tiles: Record<string, TileOverride>;
+}
+
+export interface Project {
+  version: 1;
+  name: string;
+  tile: TileSpec;
+  rotMode: RotMode;
+  seed: number;
+  designs: Design[];
+  walls: Wall[];
+}
