@@ -9,6 +9,7 @@ import { DEFECT_COLORS, WallSvg } from './WallSvg';
 const LABELS: Record<DefectType, [string, string]> = {
   adjacent: ['voisin identique', 'voisins identiques'],
   line: ['alignement', 'alignements'],
+  pattern: ['répétition régulière', 'répétitions régulières'],
   clump: ['amas', 'amas'],
   tone: ['tache de teinte', 'taches de teinte'],
 };
@@ -75,7 +76,7 @@ export function HarmonyDialog() {
         <h2 id="harmony-title">Harmoniser la répartition</h2>
         <p className="hint">
           Répartition actuelle : <b>{current.score}/100</b>, <DefectList report={current} />.
-          {' '}Ces propositions échangent seulement des carreaux : les quantités à commander ne changent pas, et les carreaux peints ou échangés à la main restent en place.
+          {' '}Ces propositions échangent seulement des carreaux d'un même pan : les quantités ne changent pas, et les carreaux peints ou échangés à la main restent en place.
         </p>
         {!proposals && <p role="status">Recherche en cours…</p>}
         {proposals && (

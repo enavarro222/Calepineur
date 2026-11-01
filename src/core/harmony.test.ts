@@ -176,6 +176,65 @@ describe('harmonyProposals', () => {
     expect(best!.report.counts.line).toBe(0);
   });
 
+  // Régression : écarter au mieux les motifs produisait un pavage périodique, noté 100/100.
+  it('ne crée pas de trame régulière', () => {
+    const { p, comps } = ready({ walls: [wall({ W: 200, H: 90, zone: [[-10, -10], [-10, 100], [210, 100], [210, -10]] })] });
+    const peak = (x: Project): number => {
+      const c = comps[0]!;
+      const seen = new Map<string, number>();
+      for (const a of c.tiles) for (const b of c.tiles) {
+        if (a === b || x.walls[0]!.tiles[a.key]!.d !== x.walls[0]!.tiles[b.key]!.d) continue;
+        const v = `${Math.round(b.c[0] - a.c[0])},${Math.round(b.c[1] - a.c[1])}`;
+        if (Math.hypot(b.c[0] - a.c[0], b.c[1] - a.c[1]) < 40) seen.set(v, (seen.get(v) ?? 0) + 1);
+      }
+      return Math.max(...seen.values()) / c.tiles.length;
+    };
+    const random = peak(p);
+    for (const { project: next, report } of harmonyProposals(p, comps)) {
+      expect(peak(next)).toBeLessThan(random * 1.6);
+      expect(report.counts.pattern).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('repère une trame régulière', () => {
+    const { p, comps } = ready({ walls: [wall({ W: 200, H: 90, zone: [[-10, -10], [-10, 100], [210, 100], [210, -10]] })] });
+    // pavage périodique des 7 motifs : aucun voisin identique, mais une trame partout
+    paintAll(p, comps, (q, r) => 'ABCDEFG'[((q + 3 * (r - Math.floor(q / 2))) % 7 + 7) % 7]!);
+    const rep = harmonyReport(p, comps);
+    expect(rep.counts.adjacent).toBe(0);
+    expect(rep.counts.pattern).toBeGreaterThan(20);
+    expect(rep.score).toBeLessThan(40);
+  });
+
+  it('garde les quantités de chaque pan', () => {
+    const { p, comps } = demo();
+    const perWall = (x: Project) => comps.map((c, i) => c.tiles.map(t => x.walls[i]!.tiles[t.key]!.d).sort());
+    for (const { project: next } of harmonyProposals(p, comps)) expect(perWall(next)).toEqual(perWall(p));
+  });
+
+  it('ne produit ni damier ni ligne de teinte', () => {
+    const designs = [...'ABC'.split('').map(k => design(k, '#101010')), ...'DEFG'.split('').map(k => design(k, '#f0f0f0'))];
+    const { p, comps } = ready({ designs, walls: [wall({ W: 160, H: 80, zone: [[-10, -10], [-10, 90], [170, 90], [170, -10]] })] });
+    const [best] = harmonyProposals(p, comps);
+    const darkRatio = (keys: string[]) => keys.filter(k => 'ABC'.includes(best!.project.walls[0]!.tiles[k]!.d!)).length / keys.length;
+    const c = comps[0]!;
+    const opposite = c.tiles.filter(t => t.full).map(t => {
+      const around = c.g.neighbors(t.q, t.r).map(([q, r]) => `${q},${r}`).filter(k => c.byKey.has(k));
+      return Math.abs(darkRatio(around) - darkRatio([t.key]));
+    });
+    expect(opposite.reduce((a, b) => a + b, 0) / opposite.length).toBeLessThan(0.75);
+  });
+
+  // Régression : les teintes marquées migraient vers le pourtour, en laissant le centre pâle.
+  it('garde l\'équilibre des teintes entre le bord et le centre', () => {
+    const designs = [...'AB'.split('').map(k => design(k, '#101010')), ...'CDEFG'.split('').map(k => design(k, '#c8c8c8'))];
+    const { p, comps } = ready({ designs, walls: [wall({ W: 120, H: 60 })] });
+    const c = comps[0]!;
+    const inner = c.tiles.filter(t => c.g.neighbors(t.q, t.r).filter(([q, r]) => c.byKey.has(`${q},${r}`)).length === 6);
+    const dark = (x: Project) => inner.filter(t => 'AB'.includes(x.walls[0]!.tiles[t.key]!.d!)).length;
+    for (const { project: next } of harmonyProposals(p, comps)) expect(dark(next)).toBe(dark(p));
+  });
+
   it('reste rapide sur un grand projet', () => {
     const big = project({ designs: seven(), walls: [wall({ W: 500, H: 150, zone: [[-10, -10], [-10, 160], [510, 160], [510, -10]] })] });
     const comps = computeWalls(big);

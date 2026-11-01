@@ -1,11 +1,16 @@
 // Harmonie d'une répartition : un score pour voir les défauts, et une recherche par échanges pour les réduire.
-// Échanger deux carreaux garde les quantités exactes : la commande ne change pas.
+// Échanger deux carreaux d'un même pan garde les quantités exactes, au total comme par pan.
+//
+// Le but est un aspect naturel, pas un écartement maximal : sur un réseau hexagonal, écarter au mieux les motifs
+// identiques ou alterner clair et sombre mène à un pavage périodique, qui saute aux yeux. Le coût ne récompense donc
+// jamais la régularité. Il pénalise les défauts et toute répétition à pas constant, et s'annule une fois ceux-ci
+// évités : la recherche continue alors au hasard parmi les solutions sans défaut.
 import { produce } from 'immer';
 import type { WallComp } from './compute';
 import { hashStr, mulberry32 } from './geom';
 import type { Point, Project } from './types';
 
-export type DefectType = 'adjacent' | 'line' | 'clump' | 'tone';
+export type DefectType = 'adjacent' | 'line' | 'pattern' | 'clump' | 'tone';
 
 export interface Defect {
   type: DefectType;
@@ -37,11 +42,15 @@ interface Pair {
   tone: number; // coût si leurs teintes s'écartent de la moyenne du même côté
 }
 
+// Trois carreaux à pas constant : c'est ce que l'œil lit comme une ligne, ou comme une trame quand elle se répète.
 interface Line {
   a: number;
   b: number;
   c: number;
-  cost: number;
+  same: number; // coût si les trois ont le même motif
+  tone: number; // coût si les trois sont du même côté de la teinte moyenne
+  axis: boolean; // ligne droite de carreaux proches
+  shown: boolean; // assez courte pour être signalée comme défaut
 }
 
 interface Model {
@@ -56,16 +65,24 @@ interface Model {
 }
 
 const ADJACENT_COST = 12;
-const NEAR_COST = 1.6;
-const TONE_COST = 0.9;
+const NEAR_COST = 0.5;
+const TONE_COST = 0.35;
 const LINE_COST = 4;
+const PATTERN_COST = 3;
+const TONE_LINE_COST = 0.35;
+const PATTERN_RADIUS = 4.4; // pas le plus long pris en compte, en distance entre carreaux voisins
+const PATTERN_SHOWN = 3.1;
+const TONE_LINE_RADIUS = 2.1;
+const AXIS_STEPS = [1, Math.sqrt(3), 2];
 const RING2_RADIUS = 2.1; // en distance entre carreaux voisins
+const FULL_RING1 = 6;
 const VISIBLE_FRAC = 0.2; // en dessous, le morceau se voit trop peu pour compter comme défaut
 const TONE_MIN_SPREAD = 0.05;
 const TONE_Z = 0.6;
 const TONE_PATCH = 4;
+const TONE_RUN = 4;
 const CLUMP_MIN = 4;
-const DEFECT_POINTS: Record<DefectType, number> = { adjacent: 3, line: 2, clump: 1, tone: 1 };
+const DEFECT_POINTS: Record<DefectType, number> = { adjacent: 3, line: 2, pattern: 1, clump: 1, tone: 1 };
 const SCORE_SLOPE = 3;
 const PROPOSALS = 4;
 
@@ -95,18 +112,25 @@ function buildCells(project: Project, comps: WallComp[]): Cell[] {
 
 function buildLines(comp: WallComp, wallCells: number[], at: Map<string, number>, lines: Line[], cells: Cell[]): void {
   const g = comp.g;
-  const steps = [...g.nearAxes.flatMap(a => [g.d, 2 * g.d].map(k => [a, k] as const)), ...g.farAxes.map(a => [a, g.d * Math.sqrt(3)] as const)];
-  const nodeAt = (x: number, y: number): number | undefined => {
-    const n = g.nearest(x, y, comp.ox, comp.oy);
-    return at.get(`${n.q},${n.r}`);
-  };
   for (const a of wallCells) {
-    const [x, y] = cells[a]!.c;
-    for (const [axis, k] of steps) {
-      const b = nodeAt(x + axis[0] * k, y + axis[1] * k);
-      const c = nodeAt(x + 2 * axis[0] * k, y + 2 * axis[1] * k);
-      if (b === undefined || c === undefined) continue;
-      lines.push({ a, b, c, cost: LINE_COST * Math.min(cells[a]!.frac, cells[b]!.frac, cells[c]!.frac) });
+    const ca = cells[a]!;
+    for (const b of wallCells) {
+      const cb = cells[b]!;
+      const vx = cb.c[0] - ca.c[0];
+      const vy = cb.c[1] - ca.c[1];
+      const step = Math.hypot(vx, vy) / g.d;
+      if (a === b || step > PATTERN_RADIUS || vx < -1e-6 || (Math.abs(vx) < 1e-6 && vy < 0)) continue;
+      const n = g.nearest(cb.c[0] + vx, cb.c[1] + vy, comp.ox, comp.oy);
+      const c = at.get(`${n.q},${n.r}`);
+      if (c === undefined) continue;
+      const f = Math.min(ca.frac, cb.frac, cells[c]!.frac);
+      const axis = AXIS_STEPS.some(k => Math.abs(step - k) < 0.01);
+      lines.push({
+        a, b, c, axis,
+        same: f * (axis ? LINE_COST : PATTERN_COST / step),
+        tone: step <= TONE_LINE_RADIUS ? TONE_LINE_COST : 0,
+        shown: step <= PATTERN_SHOWN,
+      });
     }
   }
 }
@@ -133,7 +157,7 @@ function buildModel(project: Project, comps: WallComp[]): Model {
         if (dist > RING2_RADIUS) continue;
         const f = Math.min(ca.frac, cb.frac);
         const near = 1 / dist ** 2;
-        pairs.push({ a, b, same: f * (dist < 1.1 ? ADJACENT_COST : NEAR_COST * near), tone: f * TONE_COST * near });
+        pairs.push({ a, b, same: f * (dist < 1.1 ? ADJACENT_COST : NEAR_COST * near), tone: TONE_COST * near });
         ring2[a]!.push(b);
         ring2[b]!.push(a);
         if (dist < 1.1) {
@@ -176,13 +200,31 @@ function clumpDefects(m: Model, project: Project): Defect[] {
   return defects;
 }
 
+const sideOf = (z: number): number => (z > TONE_Z ? 1 : z < -TONE_Z ? -1 : 0);
+
+function toneRuns(m: Model, side: (i: number) => number): Defect[] {
+  const next = new Map(m.lines.filter(l => l.tone > 0).map(l => [`${l.a},${l.b}`, l]));
+  const hasBefore = new Set(m.lines.filter(l => l.tone > 0).map(l => `${l.b},${l.c}`));
+  const defects: Defect[] = [];
+  for (const l of next.values()) {
+    const s = side(l.a);
+    if (!s || side(l.b) !== s || side(l.c) !== s) continue;
+    if (hasBefore.has(`${l.a},${l.b}`)) {
+      const before = m.lines.find(x => x.b === l.a && x.c === l.b);
+      if (before && side(before.a) === s) continue;
+    }
+    const run = [l.a, l.b, l.c];
+    for (let n = next.get(`${l.b},${l.c}`); n && side(n.c) === s; n = next.get(`${n.b},${n.c}`)) run.push(n.c);
+    if (run.length >= TONE_RUN) defects.push({ type: 'tone', wall: m.cells[l.a]!.wall, keys: run.map(i => m.cells[i]!.key) });
+  }
+  return defects;
+}
+
 function toneDefects(m: Model): Defect[] {
   const defects: Defect[] = [];
   const side = (i: number): number => {
     const c = m.cells[i]!;
-    if (!isVisible(c)) return 0;
-    const z = m.toneZ[c.design]!;
-    return z > TONE_Z ? 1 : z < -TONE_Z ? -1 : 0;
+    return isVisible(c) ? sideOf(m.toneZ[c.design]!) : 0;
   };
   const seen = new Set<number>();
   m.cells.forEach((c, start) => {
@@ -200,7 +242,7 @@ function toneDefects(m: Model): Defect[] {
     }
     if (patch.length >= TONE_PATCH) defects.push({ type: 'tone', wall: c.wall, keys: patch.map(i => m.cells[i]!.key) });
   });
-  return defects;
+  return [...defects, ...toneRuns(m, side)];
 }
 
 function report(m: Model, project: Project): HarmonyReport {
@@ -215,12 +257,12 @@ function report(m: Model, project: Project): HarmonyReport {
   });
   for (const l of m.lines) {
     const [a, b, c] = [cells[l.a]!, cells[l.b]!, cells[l.c]!];
-    if (a.design === b.design && b.design === c.design && isVisible(a) && isVisible(b) && isVisible(c)) {
-      defects.push({ type: 'line', wall: a.wall, keys: [a.key, b.key, c.key] });
+    if (l.shown && a.design === b.design && b.design === c.design && isVisible(a) && isVisible(b) && isVisible(c)) {
+      defects.push({ type: l.axis ? 'line' : 'pattern', wall: a.wall, keys: [a.key, b.key, c.key] });
     }
   }
   defects.push(...clumpDefects(m, project), ...toneDefects(m));
-  const counts: Record<DefectType, number> = { adjacent: 0, line: 0, clump: 0, tone: 0 };
+  const counts: Record<DefectType, number> = { adjacent: 0, line: 0, pattern: 0, clump: 0, tone: 0 };
   let points = 0;
   for (const d of defects) {
     counts[d.type]++;
@@ -239,10 +281,17 @@ const pairCost = (m: Model, p: Pair, d: number[]): number => {
   const a = d[p.a]!;
   const b = d[p.b]!;
   if (a < 0 || b < 0) return 0;
-  return (a === b ? p.same : 0) + p.tone * m.toneZ[a]! * m.toneZ[b]!;
+  // Jamais de bonus pour un clair à côté d'un sombre : cela produirait un damier.
+  return (a === b ? p.same : 0) + p.tone * Math.max(0, m.toneZ[a]! * m.toneZ[b]!);
 };
 
-const lineCost = (l: Line, d: number[]): number => (d[l.a]! >= 0 && d[l.a] === d[l.b] && d[l.b] === d[l.c] ? l.cost : 0);
+function lineCost(m: Model, l: Line, d: number[]): number {
+  const [a, b, c] = [d[l.a]!, d[l.b]!, d[l.c]!];
+  if (a < 0 || b < 0 || c < 0) return 0;
+  if (a === b && b === c) return l.same;
+  const s = sideOf(m.toneZ[a]!);
+  return s && s === sideOf(m.toneZ[b]!) && s === sideOf(m.toneZ[c]!) ? l.tone : 0;
+}
 
 function costAround(m: Model, i: number, j: number, d: number[]): number {
   let e = 0;
@@ -251,26 +300,38 @@ function costAround(m: Model, i: number, j: number, d: number[]): number {
     const p = m.pairs[k]!;
     if (p.a !== i && p.b !== i) e += pairCost(m, p, d);
   }
-  for (const k of m.linesOf[i]!) e += lineCost(m.lines[k]!, d);
+  for (const k of m.linesOf[i]!) e += lineCost(m, m.lines[k]!, d);
   for (const k of m.linesOf[j]!) {
     const l = m.lines[k]!;
-    if (l.a !== i && l.b !== i && l.c !== i) e += lineCost(l, d);
+    if (l.a !== i && l.b !== i && l.c !== i) e += lineCost(m, l, d);
   }
   return e;
+}
+
+// Un carreau de bord a moins de voisins, donc moins de contraintes : sans cette règle, les teintes marquées
+// migreraient vers le pourtour et laisseraient le centre pâle. Le mélange de départ a déjà le bon équilibre.
+function shiftsTone(m: Model, i: number, j: number, d: number[]): boolean {
+  return m.ring1[i]!.length < FULL_RING1 !== m.ring1[j]!.length < FULL_RING1
+    && sideOf(m.toneZ[d[i]!]!) !== sideOf(m.toneZ[d[j]!]!);
 }
 
 function search(m: Model, seed: string): number[] {
   const rng = mulberry32(hashStr(seed));
   const d = m.cells.map(c => c.design);
-  const movable = m.cells.flatMap((c, i) => (c.locked || c.design < 0 ? [] : [i]));
-  if (movable.length < 2) return d;
-  const steps = Math.min(60000, movable.length * 400);
+  const byWall = new Map<number, number[]>();
+  m.cells.forEach((c, i) => {
+    if (!c.locked && c.design >= 0) byWall.set(c.wall, [...(byWall.get(c.wall) ?? []), i]);
+  });
+  const movable = [...byWall.values()].filter(cells => cells.length > 1).flat();
+  if (!movable.length) return d;
+  const steps = Math.min(40000, movable.length * 300);
   const startT = 3;
   const endT = 0.08;
   for (let s = 0; s < steps; s++) {
     const i = movable[Math.floor(rng() * movable.length)]!;
-    const j = movable[Math.floor(rng() * movable.length)]!;
-    if (d[i] === d[j]) continue;
+    const mates = byWall.get(m.cells[i]!.wall)!;
+    const j = mates[Math.floor(rng() * mates.length)]!;
+    if (d[i] === d[j] || shiftsTone(m, i, j, d)) continue;
     const before = costAround(m, i, j, d);
     [d[i], d[j]] = [d[j]!, d[i]!];
     const delta = costAround(m, i, j, d) - before;

@@ -58,7 +58,7 @@ export interface WallSvgProps {
   selected?: string | null;
 }
 
-export const DEFECT_COLORS: Record<DefectType, string> = { adjacent: '#d6202e', line: '#ef7d00', clump: '#8a2be2', tone: '#111111' };
+export const DEFECT_COLORS: Record<DefectType, string> = { adjacent: '#d6202e', line: '#ef7d00', pattern: '#0b6fd0', clump: '#8a2be2', tone: '#111111' };
 
 function DefectMarks({ comp, defects, sy, r, sw, fs }: { comp: WallComp; defects: Defect[]; sy: (y: number) => number; r: number; sw: number; fs: number }) {
   const center = (key: string): string => {
@@ -70,7 +70,7 @@ function DefectMarks({ comp, defects, sy, r, sw, fs }: { comp: WallComp; defects
     <g data-testid="defects" pointerEvents="none" fill="none">
       {known.map((d, i) => {
         const stroke = DEFECT_COLORS[d.type];
-        if (d.type === 'adjacent' || d.type === 'line') {
+        if (d.type === 'adjacent' || d.type === 'line' || d.type === 'pattern') {
           return <polyline key={i} data-defect={d.type} points={d.keys.map(center).join(' ')} stroke={stroke} strokeWidth={fmt(sw * 5)} strokeLinecap="round" />;
         }
         return (
