@@ -84,6 +84,12 @@ describe('mergeAiProject', () => {
 });
 
 describe('modification partielle', () => {
+  it('accepte les couleurs d\'un motif', () => {
+    const p = patch({ designs: [{ key: 'A', colors: ['#202830', '#7d9488'] }] });
+    expect(p.designs[0]!.colors).toEqual(['#202830', '#7d9488']);
+    expect(describeChanges(project(), p).join(' ')).toMatch(/Motif A modifié/);
+  });
+
   it('ne change que les champs donnés', () => {
     const p = patch({ tile: { F: 15 }, walls: [{ id: 'w1', W: 250 }] });
     expect(p.tile).toMatchObject({ F: 15, joint: 0.2 });

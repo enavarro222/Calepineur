@@ -5,12 +5,18 @@
 // identiques ou alterner clair et sombre mène à un pavage périodique, qui saute aux yeux. Le coût ne récompense donc
 // jamais la régularité. Il pénalise les défauts et toute répétition à pas constant, et s'annule une fois ceux-ci
 // évités : la recherche continue alors au hasard parmi les solutions sans défaut.
+//
+// Les styles « vagues » et « dégradé » jouent avec les couleurs : des voisins qui partagent une couleur, et chaque
+// motif attiré vers une zone selon sa place dans la chaîne des couleurs. La zone visée est une cible lisse
+// (ondulations ou pente) ramenée en rangs, pour que chaque motif y trouve exactement sa part. Les échanges se font
+// alors entre pans : le total commandé ne change pas, la part de chaque pan oui.
 import { produce } from 'immer';
 import type { WallComp } from './compute';
 import { hashStr, mulberry32 } from './geom';
-import type { Point, Project } from './types';
+import { colorAffinity, colorChain } from './palette';
+import type { HarmonyStyle, Point, Project } from './types';
 
-export type DefectType = 'adjacent' | 'line' | 'pattern' | 'clump' | 'tone';
+export type DefectType = 'adjacent' | 'line' | 'pattern' | 'clump' | 'tone' | 'clash';
 
 export interface Defect {
   type: DefectType;
@@ -30,6 +36,7 @@ interface Cell {
   wall: number;
   key: string;
   c: Point;
+  gx: number; // abscisse le long de la suite des pans
   frac: number;
   locked: boolean;
   design: number;
@@ -40,6 +47,7 @@ interface Pair {
   b: number;
   same: number; // coût si les deux carreaux ont le même motif
   tone: number; // coût si leurs teintes s'écartent de la moyenne du même côté
+  adjacent: boolean;
 }
 
 // Trois carreaux à pas constant : c'est ce que l'œil lit comme une ligne, ou comme une trame quand elle se répète.
@@ -62,6 +70,11 @@ interface Model {
   toneZ: number[]; // teinte de chaque motif, en écarts à la moyenne des carreaux posés
   pairsOf: number[][];
   linesOf: number[][];
+  style: HarmonyStyle;
+  affinity: number[][]; // parenté de couleur entre motifs
+  chain: number[]; // motifs du plus sombre au plus clair
+  rank: number[]; // place de chaque motif dans la chaîne des couleurs, de 0 (sombre) à 1 (clair)
+  step: number; // distance entre carreaux voisins
 }
 
 const ADJACENT_COST = 12;
@@ -82,7 +95,12 @@ const TONE_Z = 0.6;
 const TONE_PATCH = 4;
 const TONE_RUN = 4;
 const CLUMP_MIN = 4;
-const DEFECT_POINTS: Record<DefectType, number> = { adjacent: 3, line: 2, pattern: 1, clump: 1, tone: 1 };
+const SAME_BOOST = 3; // avec une cible de couleur, deux voisins identiques deviennent tentants : on les interdit plus fort
+const COLOR_COST = 4;
+const TARGET_COST = 22;
+const CLASH_MAX = 0.2; // parenté sous laquelle deux voisins n'ont pas de couleur commune
+const WAVES = 6;
+const DEFECT_POINTS: Record<DefectType, number> = { adjacent: 3, line: 2, pattern: 1, clump: 1, tone: 1, clash: 0.25 };
 const SCORE_SLOPE = 3;
 const PROPOSALS = 4;
 
@@ -104,10 +122,29 @@ function toneScores(project: Project, cells: Cell[]): number[] {
 
 function buildCells(project: Project, comps: WallComp[]): Cell[] {
   const index = new Map(project.designs.map((d, i) => [d.key, i]));
-  return project.walls.flatMap((w, wall) => comps[wall]!.tiles.map((t): Cell => {
-    const a = w.tiles[t.key];
-    return { wall, key: t.key, c: t.c, frac: t.frac, locked: !!a?.lk, design: index.get(a?.d ?? '') ?? -1 };
-  }));
+  let offset = 0;
+  return project.walls.flatMap((w, wall) => {
+    const x0 = offset;
+    offset += w.W;
+    return comps[wall]!.tiles.map((t): Cell => {
+      const a = w.tiles[t.key];
+      return { wall, key: t.key, c: t.c, gx: x0 + t.c[0], frac: t.frac, locked: !!a?.lk, design: index.get(a?.d ?? '') ?? -1 };
+    });
+  });
+}
+
+// Place de chaque motif le long de la chaîne des couleurs, au milieu de sa part des carreaux posés.
+function chainRanks(project: Project, cells: Cell[], chain: number[]): number[] {
+  const count = project.designs.map(() => 0);
+  for (const c of cells) if (c.design >= 0) count[c.design]!++;
+  const total = Math.max(1, count.reduce((a, b) => a + b, 0));
+  const rank = project.designs.map(() => 0);
+  let done = 0;
+  for (const d of chain) {
+    rank[d] = (done + count[d]! / 2) / total;
+    done += count[d]!;
+  }
+  return rank;
 }
 
 function buildLines(comp: WallComp, wallCells: number[], at: Map<string, number>, lines: Line[], cells: Cell[]): void {
@@ -135,8 +172,10 @@ function buildLines(comp: WallComp, wallCells: number[], at: Map<string, number>
   }
 }
 
-function buildModel(project: Project, comps: WallComp[]): Model {
+function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): Model {
   const cells = buildCells(project, comps);
+  const affinity = colorAffinity(project.designs);
+  const chain = colorChain(project.designs);
   const toneZ = toneScores(project, cells);
   const pairs: Pair[] = [];
   const lines: Line[] = [];
@@ -157,7 +196,7 @@ function buildModel(project: Project, comps: WallComp[]): Model {
         if (dist > RING2_RADIUS) continue;
         const f = Math.min(ca.frac, cb.frac);
         const near = 1 / dist ** 2;
-        pairs.push({ a, b, same: f * (dist < 1.1 ? ADJACENT_COST : NEAR_COST * near), tone: TONE_COST * near });
+        pairs.push({ a, b, same: f * (dist < 1.1 ? ADJACENT_COST : NEAR_COST * near), tone: TONE_COST * near, adjacent: dist < 1.1 });
         ring2[a]!.push(b);
         ring2[b]!.push(a);
         if (dist < 1.1) {
@@ -173,7 +212,7 @@ function buildModel(project: Project, comps: WallComp[]): Model {
   pairs.forEach((p, i) => { pairsOf[p.a]!.push(i); pairsOf[p.b]!.push(i); });
   const linesOf: number[][] = cells.map(() => []);
   lines.forEach((l, i) => { linesOf[l.a]!.push(i); linesOf[l.b]!.push(i); linesOf[l.c]!.push(i); });
-  return { cells, pairs, lines, ring1, ring2, toneZ, pairsOf, linesOf };
+  return { cells, pairs, lines, ring1, ring2, toneZ, pairsOf, linesOf, style, affinity, chain, rank: chainRanks(project, cells, chain), step: comps[0]?.g.d ?? 1 };
 }
 
 // ---- rapport ----
@@ -245,6 +284,20 @@ function toneDefects(m: Model): Defect[] {
   return [...defects, ...toneRuns(m, side)];
 }
 
+function clashDefects(m: Model): Defect[] {
+  const defects: Defect[] = [];
+  m.ring1.forEach((ns, a) => {
+    for (const b of ns) {
+      const ca = m.cells[a]!;
+      const cb = m.cells[b]!;
+      if (a < b && ca.design !== cb.design && isVisible(ca) && isVisible(cb) && m.affinity[ca.design]![cb.design]! < CLASH_MAX) {
+        defects.push({ type: 'clash', wall: ca.wall, keys: [ca.key, cb.key] });
+      }
+    }
+  });
+  return defects;
+}
+
 function report(m: Model, project: Project): HarmonyReport {
   const cells = m.cells;
   const defects: Defect[] = [];
@@ -261,8 +314,11 @@ function report(m: Model, project: Project): HarmonyReport {
       defects.push({ type: l.axis ? 'line' : 'pattern', wall: a.wall, keys: [a.key, b.key, c.key] });
     }
   }
-  defects.push(...clumpDefects(m, project), ...toneDefects(m));
-  const counts: Record<DefectType, number> = { adjacent: 0, line: 0, pattern: 0, clump: 0, tone: 0 };
+  // Dans les styles de couleur, les taches de teinte et les amas sont voulus ; on signale plutôt les voisins sans
+  // couleur commune.
+  if (m.style === 'natural') defects.push(...clumpDefects(m, project), ...toneDefects(m));
+  else defects.push(...clashDefects(m));
+  const counts: Record<DefectType, number> = { adjacent: 0, line: 0, pattern: 0, clump: 0, tone: 0, clash: 0 };
   let points = 0;
   for (const d of defects) {
     counts[d.type]++;
@@ -273,7 +329,7 @@ function report(m: Model, project: Project): HarmonyReport {
 }
 
 export function harmonyReport(project: Project, comps: WallComp[]): HarmonyReport {
-  return report(buildModel(project, comps), project);
+  return report(buildModel(project, comps, project.style ?? 'natural'), project);
 }
 
 // ---- recherche par échanges ----
@@ -281,6 +337,7 @@ const pairCost = (m: Model, p: Pair, d: number[]): number => {
   const a = d[p.a]!;
   const b = d[p.b]!;
   if (a < 0 || b < 0) return 0;
+  if (m.style !== 'natural') return a === b ? p.same * SAME_BOOST : p.adjacent ? COLOR_COST * (1 - m.affinity[a]![b]!) : 0;
   // Jamais de bonus pour un clair à côté d'un sombre : cela produirait un damier.
   return (a === b ? p.same : 0) + p.tone * Math.max(0, m.toneZ[a]! * m.toneZ[b]!);
 };
@@ -289,12 +346,13 @@ function lineCost(m: Model, l: Line, d: number[]): number {
   const [a, b, c] = [d[l.a]!, d[l.b]!, d[l.c]!];
   if (a < 0 || b < 0 || c < 0) return 0;
   if (a === b && b === c) return l.same;
+  if (m.style !== 'natural') return 0;
   const s = sideOf(m.toneZ[a]!);
   return s && s === sideOf(m.toneZ[b]!) && s === sideOf(m.toneZ[c]!) ? l.tone : 0;
 }
 
-function costAround(m: Model, i: number, j: number, d: number[]): number {
-  let e = 0;
+function costAround(m: Model, i: number, j: number, d: number[], target: number[] | null): number {
+  let e = target ? TARGET_COST * ((m.rank[d[i]!]! - target[i]!) ** 2 + (m.rank[d[j]!]! - target[j]!) ** 2) : 0;
   for (const k of m.pairsOf[i]!) e += pairCost(m, m.pairs[k]!, d);
   for (const k of m.pairsOf[j]!) {
     const p = m.pairs[k]!;
@@ -315,26 +373,59 @@ function shiftsTone(m: Model, i: number, j: number, d: number[]): boolean {
     && sideOf(m.toneZ[d[i]!]!) !== sideOf(m.toneZ[d[j]!]!);
 }
 
-function search(m: Model, seed: string): number[] {
+// Cible lisse, ramenée en rangs de 0 à 1 : chaque motif y trouve une bande à la mesure de sa quantité.
+function styleTarget(m: Model, k: number, seed: string): number[] | null {
+  if (m.style === 'natural' || !m.cells.length) return null;
+  const rng = mulberry32(hashStr(`${seed}:cible`));
+  const ys = m.cells.map(c => c.c[1]);
+  const span = Math.max(1, Math.max(...m.cells.map(c => c.gx)) - Math.min(...m.cells.map(c => c.gx)), Math.max(...ys) - Math.min(...ys));
+  let raw: number[];
+  if (m.style === 'gradient') {
+    const dir = GRADIENT_DIRECTIONS[k % GRADIENT_DIRECTIONS.length]!;
+    raw = m.cells.map(c => dir.x * c.gx + dir.y * c.c[1] + (rng() - 0.5) * span * 0.04);
+  } else {
+    const waves = Array.from({ length: WAVES }, () => {
+      const len = m.step * (6 + rng() * 10); // une ondulation tous les 6 à 16 carreaux
+      const th = (rng() - 0.5) * 1.1;
+      return { kx: 2 * Math.PI * Math.cos(th) / len, ky: 2 * Math.PI * Math.sin(th) / len, ph: rng() * 2 * Math.PI, a: len };
+    });
+    raw = m.cells.map(c => waves.reduce((s, w) => s + w.a * Math.sin(w.kx * c.gx + w.ky * c.c[1] + w.ph), 0));
+  }
+  const order = raw.map((_, i) => i).sort((a, b) => raw[a]! - raw[b]!);
+  const target = new Array<number>(raw.length);
+  order.forEach((i, r) => { target[i] = order.length > 1 ? r / (order.length - 1) : 0.5; });
+  return target;
+}
+
+const GRADIENT_DIRECTIONS = [
+  { x: 1, y: 0, label: (a: string, b: string) => `${a} à gauche, ${b} à droite` },
+  { x: -1, y: 0, label: (a: string, b: string) => `${b} à gauche, ${a} à droite` },
+  { x: 0, y: 1, label: (a: string, b: string) => `${a} en bas, ${b} en haut` },
+  { x: 1, y: 1.5, label: (a: string, b: string) => `En diagonale : ${a} en bas à gauche, ${b} en haut à droite` },
+];
+
+function search(m: Model, seed: string, target: number[] | null): number[] {
   const rng = mulberry32(hashStr(seed));
   const d = m.cells.map(c => c.design);
+  const colorful = m.style !== 'natural';
   const byWall = new Map<number, number[]>();
   m.cells.forEach((c, i) => {
-    if (!c.locked && c.design >= 0) byWall.set(c.wall, [...(byWall.get(c.wall) ?? []), i]);
+    const group = colorful ? 0 : c.wall;
+    if (!c.locked && c.design >= 0) byWall.set(group, [...(byWall.get(group) ?? []), i]);
   });
   const movable = [...byWall.values()].filter(cells => cells.length > 1).flat();
   if (!movable.length) return d;
-  const steps = Math.min(40000, movable.length * 300);
-  const startT = 3;
-  const endT = 0.08;
+  const steps = colorful ? Math.min(200000, movable.length * 1200) : Math.min(40000, movable.length * 300);
+  const startT = colorful ? 4 : 3;
+  const endT = colorful ? 0.05 : 0.08;
   for (let s = 0; s < steps; s++) {
     const i = movable[Math.floor(rng() * movable.length)]!;
-    const mates = byWall.get(m.cells[i]!.wall)!;
+    const mates = byWall.get(colorful ? 0 : m.cells[i]!.wall)!;
     const j = mates[Math.floor(rng() * mates.length)]!;
-    if (d[i] === d[j] || shiftsTone(m, i, j, d)) continue;
-    const before = costAround(m, i, j, d);
+    if (d[i] === d[j] || (!colorful && shiftsTone(m, i, j, d))) continue;
+    const before = costAround(m, i, j, d, target);
     [d[i], d[j]] = [d[j]!, d[i]!];
-    const delta = costAround(m, i, j, d) - before;
+    const delta = costAround(m, i, j, d, target) - before;
     const T = startT * (endT / startT) ** (s / steps);
     if (delta > 0 && rng() >= Math.exp(-delta / T)) [d[i], d[j]] = [d[j]!, d[i]!];
   }
@@ -355,19 +446,35 @@ export interface Proposal {
   assignment: Assignment;
   project: Project;
   report: HarmonyReport;
+  style: HarmonyStyle;
+  label: string;
 }
 
 // Plusieurs recherches indépendantes : la meilleure note n'est pas forcément la plus belle, l'œil choisit.
-export function harmonyProposals(project: Project, comps: WallComp[], count = PROPOSALS): Proposal[] {
-  const m = buildModel(project, comps);
-  return Array.from({ length: count }, (_, k): Proposal => {
-    const d = search(m, `harmonie:${project.seed}:${k}`);
+// Pour le dégradé, chaque proposition prend un sens différent.
+export function harmonyProposals(project: Project, comps: WallComp[], style: HarmonyStyle = project.style ?? 'natural', count = PROPOSALS): Proposal[] {
+  const m = buildModel(project, comps, style);
+  const name = (i: number | undefined): string => {
+    const d = i === undefined ? undefined : project.designs[i];
+    return d ? d.name || d.key : '';
+  };
+  const ends = [name(m.chain[0]), name(m.chain[m.chain.length - 1])] as const;
+  const proposals = Array.from({ length: count }, (_, k): Proposal => {
+    const seed = `harmonie:${style}:${project.seed}:${k}`;
+    const d = search(m, seed, styleTarget(m, k, seed));
     const assignment: Assignment = {};
     m.cells.forEach((c, i) => {
       const design = project.designs[d[i]!];
       if (design) (assignment[c.wall] ??= {})[c.key] = design.key;
     });
-    const next = produce(project, draft => applyAssignment(draft, assignment));
-    return { assignment, project: next, report: harmonyReport(next, comps) };
-  }).sort((a, b) => b.report.score - a.report.score);
+    const next = produce(project, draft => {
+      applyAssignment(draft, assignment);
+      if (style === 'natural') delete draft.style;
+      else draft.style = style;
+    });
+    const label = style === 'gradient' ? GRADIENT_DIRECTIONS[k % GRADIENT_DIRECTIONS.length]!.label(ends[0], ends[1]) : '';
+    return { assignment, project: next, report: harmonyReport(next, comps), style, label };
+  });
+  // L'ordre des sens du dégradé parle de lui-même ; les autres propositions vont de la meilleure note à la moins bonne.
+  return style === 'gradient' ? proposals : proposals.sort((a, b) => b.report.score - a.report.score);
 }

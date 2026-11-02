@@ -9,8 +9,8 @@ import { latticeFor } from '../core/lattice';
 import { optimizeGrid } from '../core/optimize';
 import { calibPoints } from '../core/photo';
 import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
-import type { Project, Wall } from '../core/types';
-import { averageColor, cropImage, imageSize, readImageFile } from '../lib/images';
+import type { HarmonyStyle, Project, Wall } from '../core/types';
+import { averageColor, cropImage, dominantColors, imageSize, readImageFile } from '../lib/images';
 import { removeUnusedImages, writeImage } from './persistence';
 import { commit, getComps, getProject, mutate, replaceProject, setUi, showToast, useStore } from './store';
 
@@ -22,8 +22,12 @@ export function shuffle(keepLocked: boolean): void {
   });
 }
 
-export function chooseProposal(assignment: Assignment): void {
-  commit(p => applyAssignment(p, assignment));
+export function chooseProposal(assignment: Assignment, style: HarmonyStyle): void {
+  commit(p => {
+    applyAssignment(p, assignment);
+    if (style === 'natural') delete p.style;
+    else p.style = style;
+  });
   setUi({ harmonyOpen: false });
   showToast('Répartition appliquée. Les quantités à commander ne changent pas.');
 }
@@ -170,15 +174,33 @@ export function removePhoto(i: number): void {
 export async function uploadDesignImage(k: number, file: File): Promise<void> {
   try {
     const r = await readImageFile(file, 400);
-    const color = await averageColor(r.url);
+    const [color, colors] = await Promise.all([averageColor(r.url), dominantColors(r.url)]);
     const ref = storeImage(r.url);
     commit(p => {
       p.designs[k]!.img = ref;
       p.designs[k]!.color = color;
+      p.designs[k]!.colors = colors;
     });
   } catch (e) {
     fileError(e);
   }
+}
+
+// Relit les couleurs principales de tous les motifs qui ont une image.
+export async function detectColors(): Promise<void> {
+  const images = useStore.getState().images;
+  const found = await Promise.all(getProject().designs.map(async d => {
+    const url = imageUrl(d.img, images);
+    return url ? { key: d.key, colors: await dominantColors(url).catch(() => []) } : null;
+  }));
+  const done = found.filter(f => f && f.colors.length) as { key: string; colors: string[] }[];
+  commit(p => {
+    for (const { key, colors } of done) {
+      const d = p.designs.find(x => x.key === key);
+      if (d) d.colors = colors;
+    }
+  });
+  showToast(done.length ? `Couleurs relues sur ${done.length} motif${done.length > 1 ? 's' : ''}. Corrige-les si besoin.` : 'Aucun motif n\'a d\'image à lire.', 5000);
 }
 
 const SHEET_MAX_SIDE = 2400; // assez de pixels pour garder chaque motif net une fois découpé
@@ -190,14 +212,16 @@ export async function cutDesignsFromPhoto(file: File): Promise<void> {
     const todo = getProject().designs.filter(d => d.crop);
     const cut = await Promise.all(todo.map(async d => {
       const url = await cropImage(sheet.url, d.crop!, MOTIF_MAX_SIDE);
-      return { key: d.key, color: await averageColor(url), ref: storeImage(url) };
+      const [color, colors] = await Promise.all([averageColor(url), dominantColors(url)]);
+      return { key: d.key, color, colors, ref: storeImage(url) };
     }));
     commit(p => {
-      for (const { key, color, ref } of cut) {
+      for (const { key, color, colors, ref } of cut) {
         const d = p.designs.find(x => x.key === key);
         if (!d) continue;
         d.img = ref;
         d.color = color;
+        d.colors = colors;
         delete d.crop;
       }
     });

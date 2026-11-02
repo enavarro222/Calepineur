@@ -1,4 +1,5 @@
 // Lecture et écriture du fichier projet. Le contenu importé est validé champ par champ.
+import { isHexColor, MAX_COLORS } from './palette';
 import type { BrushState, CalibHint, Design, DesignCrop, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
 
 export type ImageStore = Record<string, string>;
@@ -73,6 +74,7 @@ function parseDesign(v: unknown, i: number): Design {
     img: str(d.img),
     color: str(d.color, '#999999'),
     weight: optNum(d.weight, `designs[${i}].weight`, 1),
+    ...(Array.isArray(d.colors) && d.colors.some(isHexColor) ? { colors: d.colors.filter(isHexColor).slice(0, MAX_COLORS) } : {}),
     ...(d.crop != null ? { crop: parseCrop(d.crop, `designs[${i}].crop`) } : {}),
   };
 }
@@ -155,6 +157,7 @@ export function parseProject(v: unknown): Project {
     tile: parseTile(s.tile),
     rotMode: rot === '180' || rot === '60' ? rot : 'none',
     seed: optNum(s.seed, 'seed', 1),
+    ...(s.style === 'waves' || s.style === 'gradient' ? { style: s.style } : {}),
     designs: arr(s.designs, 'designs').map(parseDesign),
     walls: arr(s.walls, 'walls').map(parseWall),
   };

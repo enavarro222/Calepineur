@@ -9,6 +9,7 @@ export type Orient = 'flat' | 'pointy';
 export type RotMode = 'none' | '180' | '60';
 export type ZoneMode = 'organic' | 'cut';
 export type BrushState = 'add' | 'del';
+export type HarmonyStyle = 'natural' | 'waves' | 'gradient';
 
 export interface TileSpec {
   F: number; // largeur plat à plat
@@ -34,7 +35,8 @@ export interface Design {
   key: string;
   name: string;
   img: string; // 'img:<id>' (image stockée), 'data:…' (intégrée) ou '' (couleur seule)
-  color: string;
+  color: string; // teinte moyenne
+  colors?: string[]; // couleurs principales, la dominante d'abord
   weight: number;
   crop?: DesignCrop; // découpe préparée, en attente de la photo
 }
@@ -99,6 +101,7 @@ export interface Project {
   tile: TileSpec;
   rotMode: RotMode;
   seed: number;
+  style?: HarmonyStyle; // style de la dernière répartition harmonisée
   designs: Design[];
   walls: Wall[];
 }

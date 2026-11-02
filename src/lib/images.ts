@@ -1,4 +1,5 @@
 // Réduit une image choisie par l'utilisateur pour tenir dans le stockage du navigateur.
+import { extractPalette } from '../core/palette';
 import type { DesignCrop } from '../core/types';
 
 export interface ReadImage {
@@ -70,6 +71,30 @@ export function averageColor(url: string): Promise<string> {
       const sum = [0, 0, 0];
       for (let i = 0; i < px.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += px[i + k]!;
       resolve('#' + sum.map(v => Math.round(v / (px.length / 4)).toString(16).padStart(2, '0')).join(''));
+    };
+    im.src = url;
+  });
+}
+
+// Couleurs principales d'un motif, lues au centre de l'image : les coins montrent souvent les carreaux voisins.
+export function dominantColors(url: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onerror = () => reject(new Error('image illisible'));
+    im.onload = () => {
+      const n = 48;
+      const cv = document.createElement('canvas');
+      cv.width = n;
+      cv.height = n;
+      const g = cv.getContext('2d')!;
+      g.drawImage(im, 0, 0, n, n);
+      const px = g.getImageData(0, 0, n, n).data;
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          if (Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) > n * 0.42) px[(y * n + x) * 4 + 3] = 0;
+        }
+      }
+      resolve(extractPalette(px));
     };
     im.src = url;
   });

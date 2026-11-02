@@ -11,7 +11,7 @@ const MAX_TILES_PER_WALL = 20000;
 const OTHER_TILE_FIELDS = ['grout', 'edgeGap', 'waste', 'minPiece', 'perBox', 'm2PerBox'] as const;
 const TILE_FIELDS = ['F', 'joint', 'orient', ...OTHER_TILE_FIELDS] as const;
 const WALL_FIELDS = ['name', 'W', 'H', 'color', 'ox', 'oy', 'zoneMode', 'zone', 'obstacles', 'calib'] as const;
-const DESIGN_FIELDS = ['name', 'color', 'weight', 'crop'] as const;
+const DESIGN_FIELDS = ['name', 'color', 'colors', 'weight', 'crop'] as const;
 
 type Raw = Record<string, unknown>;
 
@@ -159,7 +159,7 @@ function designChanges(a: Project, b: Project): string[] {
   for (const d of b.designs) {
     const old = a.designs.find(c => c.key === d.key);
     if (!old) lines.push(`Nouveau motif : ${d.key} ${d.name}`);
-    else if (old.name !== d.name || old.color !== d.color || old.weight !== d.weight) lines.push(`Motif ${d.key} modifié : ${d.name}`);
+    else if (old.name !== d.name || old.color !== d.color || old.weight !== d.weight || String(old.colors) !== String(d.colors)) lines.push(`Motif ${d.key} modifié : ${d.name}`);
   }
   for (const d of a.designs) if (!b.designs.some(c => c.key === d.key)) lines.push(`Motif retiré : ${d.key} ${d.name}`);
   return lines;

@@ -4,8 +4,9 @@ import { bannedFor, pickDesign, pickRot } from '../core/designs';
 import { cm } from '../core/format';
 import { hashStr, mulberry32 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
-import type { Project, RotMode, Wall } from '../core/types';
-import { addDesign, cutDesignsFromPhoto, deleteDesign, renameDesignKey, resetProject, shuffle, uploadDesignImage } from '../store/actions';
+import { designColors, MAX_COLORS } from '../core/palette';
+import type { Design, Project, RotMode, Wall } from '../core/types';
+import { addDesign, cutDesignsFromPhoto, deleteDesign, detectColors, renameDesignKey, resetProject, shuffle, uploadDesignImage } from '../store/actions';
 import { commit, useStore } from '../store/store';
 import { FileButton, NumField, SegRadio } from './fields';
 import { HexSwatch } from './HexSwatch';
@@ -22,6 +23,21 @@ function KeyField({ k, value }: { k: number; value: string }) {
       onChange={e => { setDraft(e.target.value); renameDesignKey(k, e.target.value); }}
       onBlur={() => setDraft(null)}
     />
+  );
+}
+
+// Couleurs primaire, secondaire et tertiaire. Un uni répète la même couleur.
+function ColorsField({ k, design }: { k: number; design: Design }) {
+  const list = designColors(design);
+  const shown = Array.from({ length: MAX_COLORS }, (_, i) => list[Math.min(i, list.length - 1)]!);
+  const names = ['primaire', 'secondaire', 'tertiaire'];
+  return (
+    <span className="colors">
+      {shown.map((c, i) => (
+        <input key={i} type="color" aria-label={`Couleur ${names[i]} du motif ${design.key}`} title={`Couleur ${names[i]}`} value={c}
+          onChange={e => commit(p => { p.designs[k]!.colors = shown.map((x, j) => (j === i ? e.target.value : x)); }, { coalesce: `designs.${k}.colors.${i}` })} />
+      ))}
+    </span>
   );
 }
 
@@ -90,26 +106,33 @@ export function TilesPage() {
               <FileButton accept="image/*" onFile={f => void cutDesignsFromPhoto(f)}>Choisir la photo des carreaux…</FileButton>
             </div>
           )}
-          <table className="designs">
-            <thead>
-              <tr><th></th><th>Clé</th><th>Nom</th><th title="0 = motif non utilisé ; 2 = deux fois plus fréquent">Poids</th><th>Couleur</th><th></th><th></th></tr>
-            </thead>
-            <tbody>
-              {project.designs.map((d, k) => (
-                <tr key={k}>
-                  <td><HexSwatch design={d} big /></td>
-                  <td><KeyField k={k} value={d.key} /></td>
-                  <td><input aria-label={`Nom du motif ${d.key}`} value={d.name} onChange={e => edit(`designs.${k}.name`, p => { p.designs[k]!.name = e.target.value; })} /></td>
-                  <td><NumField aria-label={`Poids du motif ${d.key}`} className="w" step={0.5} min={0} value={d.weight} onChange={v => edit(`designs.${k}.weight`, p => { p.designs[k]!.weight = v; })} /></td>
-                  <td><input type="color" aria-label={`Couleur du motif ${d.key}`} value={d.color} onChange={e => edit(`designs.${k}.color`, p => { p.designs[k]!.color = e.target.value; })} /></td>
-                  <td><FileButton className="btn small" accept="image/*" onFile={f => void uploadDesignImage(k, f)}>Image…</FileButton></td>
-                  <td><button className="icon" title={`Supprimer le motif ${d.key}`} aria-label={`Supprimer le motif ${d.key}`} onClick={() => deleteDesign(k)}>×</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button onClick={addDesign}>+ Ajouter un motif</button>
-          <p className="hint">L'image d'un motif est étirée sur le rectangle qui entoure l'hexagone, pointes sur les côtés.</p>
+          <div className="designs-scroll">
+            <table className="designs">
+              <thead>
+                <tr><th></th><th>Clé</th><th>Nom</th><th title="0 = motif non utilisé ; 2 = deux fois plus fréquent">Poids</th><th title="Teinte moyenne, pour l'équilibre clair/sombre">Teinte</th><th title="Couleurs primaire, secondaire et tertiaire, pour les styles Vagues et Dégradé">Couleurs</th><th></th><th></th></tr>
+              </thead>
+              <tbody>
+                {project.designs.map((d, k) => (
+                  <tr key={k}>
+                    <td><HexSwatch design={d} big /></td>
+                    <td><KeyField k={k} value={d.key} /></td>
+                    <td><input aria-label={`Nom du motif ${d.key}`} value={d.name} onChange={e => edit(`designs.${k}.name`, p => { p.designs[k]!.name = e.target.value; })} /></td>
+                    <td><NumField aria-label={`Poids du motif ${d.key}`} className="w" step={0.5} min={0} value={d.weight} onChange={v => edit(`designs.${k}.weight`, p => { p.designs[k]!.weight = v; })} /></td>
+                    <td><input type="color" aria-label={`Couleur du motif ${d.key}`} value={d.color} onChange={e => edit(`designs.${k}.color`, p => { p.designs[k]!.color = e.target.value; })} /></td>
+                    <td><ColorsField k={k} design={d} /></td>
+                    <td><FileButton className="btn small" accept="image/*" onFile={f => void uploadDesignImage(k, f)}>Image…</FileButton></td>
+                    <td><button className="icon" title={`Supprimer le motif ${d.key}`} aria-label={`Supprimer le motif ${d.key}`} onClick={() => deleteDesign(k)}>×</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="btns">
+            <button onClick={addDesign}>+ Ajouter un motif</button>
+            <button onClick={() => void detectColors()}>Lire les couleurs des images</button>
+          </div>
+          <p className="hint">L'image d'un motif est étirée sur le rectangle qui entoure l'hexagone, pointes sur les côtés.
+            Les couleurs sont lues au chargement de l'image, la principale d'abord ; corrige-les si besoin. Elles servent aux styles Vagues et Dégradé d'Harmoniser.</p>
           <h4>Répartition</h4>
           <div className="row">
             <label>Rotation des carreaux

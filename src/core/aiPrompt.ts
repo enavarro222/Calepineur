@@ -49,6 +49,9 @@ const CROP = `Découpe des motifs : si une photo montre tous les carreaux, indiq
 - u, v : coin haut-gauche du rectangle sur la photo d'origine, non recadrée. w, h : sa largeur et sa hauteur. Tout est en proportions de l'image, de 0 à 1.
 Je charge cette photo dans Calepineur et chaque motif est découpé automatiquement. Dis-moi quelle photo choisir.`;
 
+const COLORS = `Couleurs des motifs : ajoute à chaque motif un champ "colors", ses couleurs principales au format #rrggbb, la dominante d'abord (3 au plus, une seule pour un uni). Elles servent aux styles « Vagues de couleur » et « Dégradé », où les carreaux voisins partagent une couleur.
+{ "designs": [{ "key": "A", "colors": ["#2a3140", "#7d9488"] }] }`;
+
 const IMAGES_POINTER = `Photos : si tu as accès au web, lis ${GUIDE_URL} pour préparer le calage de mes photos et la découpe de mes motifs.`;
 
 const LINK = `Lien : tu peux aussi donner la configuration, complète ou partielle, sous forme d'un lien à cliquer :
@@ -91,7 +94,9 @@ ${PARTIAL}
 
 ${compact ? IMAGES_POINTER : `${CALIB}
 
-${CROP}`}
+${CROP}
+
+${COLORS}`}
 
 ${LINK}`;
 }

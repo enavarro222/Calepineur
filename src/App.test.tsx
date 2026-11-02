@@ -1,5 +1,5 @@
 // Tests d'intégration : l'application entière, rendue et manipulée comme par un utilisateur.
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -268,6 +268,24 @@ describe('découpe reçue sans photo', () => {
   });
 });
 
+describe('couleurs des motifs', () => {
+  it('montre trois couleurs par motif, la teinte moyenne pour un motif sans couleurs', async () => {
+    const { tab } = setup();
+    await tab('Carreaux & motifs');
+    const first = getProject().designs[0]!;
+    const inputs = ['primaire', 'secondaire', 'tertiaire'].map(n => screen.getByLabelText(`Couleur ${n} du motif ${first.key}`) as HTMLInputElement);
+    expect(inputs.map(i => i.value)).toEqual([first.color, first.color, first.color]);
+  });
+
+  it('modifie une couleur sans toucher aux autres', async () => {
+    const { tab } = setup();
+    await tab('Carreaux & motifs');
+    const first = getProject().designs[0]!;
+    fireEvent.change(screen.getByLabelText(`Couleur secondaire du motif ${first.key}`), { target: { value: '#123456' } });
+    expect(getProject().designs[0]!.colors).toEqual([first.color, '#123456', first.color]);
+  });
+});
+
 describe('harmonie', () => {
   it('affiche la note', () => {
     setup();
@@ -294,6 +312,46 @@ describe('harmonie', () => {
     expect(orderCounts(getProject(), getComps()).toOrder).toBe(orderCounts(before, getComps()).toOrder);
     await user.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(getProject().walls[0]!.tiles).toEqual(before.walls[0]!.tiles);
+  });
+
+  it('propose un dégradé dans plusieurs sens et retient le style choisi', async () => {
+    const { user } = setup();
+    const before = orderCounts(getProject(), getComps());
+    await user.click(screen.getByRole('button', { name: 'Harmoniser' }));
+    const dialog = screen.getByRole('dialog', { name: 'Harmoniser la répartition' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Dégradé' }));
+    const cards = await within(dialog).findAllByTestId('proposal');
+    expect(cards[2]).toHaveTextContent(/en bas, .* en haut/);
+    await user.click(within(cards[0]!).getByRole('button', { name: 'Choisir' }));
+    expect(getProject().style).toBe('gradient');
+    expect(orderCounts(getProject(), getComps()).toOrder).toBe(before.toOrder);
+    expect(screen.getByTestId('harmony')).not.toHaveTextContent(/tache/);
+  });
+
+  it('annule et rétablit plusieurs harmonisations de suite', async () => {
+    const { user } = setup();
+    const choose = async (style: string) => {
+      await user.click(screen.getByRole('button', { name: 'Harmoniser' }));
+      const dialog = screen.getByRole('dialog', { name: 'Harmoniser la répartition' });
+      await user.click(within(dialog).getByRole('radio', { name: style }));
+      const [card] = await within(dialog).findAllByTestId('proposal');
+      await user.click(within(card!).getByRole('button', { name: 'Choisir' }));
+      return getProject();
+    };
+    const start = getProject();
+    const first = await choose('Naturel');
+    const second = await choose('Vagues de couleur');
+    const undo = () => user.click(screen.getByRole('button', { name: 'Annuler' }));
+    const redo = () => user.click(screen.getByRole('button', { name: 'Rétablir' }));
+    await undo();
+    expect(getProject()).toEqual(first);
+    await undo();
+    expect(getProject()).toEqual(start);
+    await redo();
+    expect(getProject()).toEqual(first);
+    await redo();
+    expect(getProject()).toEqual(second);
+    expect(getProject().style).toBe('waves');
   });
 
   it('se ferme avec Échap sans rien changer', async () => {

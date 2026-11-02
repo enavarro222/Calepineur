@@ -21,6 +21,14 @@ Le mélange équilibre les quantités et évite deux motifs identiques côte à 
 
 La note d'harmonie compte les voisins identiques, les alignements de trois carreaux, les répétitions à pas constant, les amas d'un même motif et les taches ou lignes claires ou sombres. Harmoniser ne fait qu'échanger des carreaux d'un même pan : les quantités ne changent pas, ni au total ni par pan, et les carreaux peints ou échangés à la main restent en place. Le but est un aspect naturel, pas un écartement maximal, qui créerait une trame régulière. La teinte d'un motif vient de sa couleur, calculée quand son image est chargée.
 
+Harmoniser propose trois styles :
+
+- **Naturel** : le mélange décrit ci-dessus.
+- **Vagues de couleur** : les voisins partagent une couleur, et les teintes se regroupent en vagues irrégulières.
+- **Dégradé** : les motifs suivent leur couleur dominante, du plus sombre au plus clair, avec une proposition par sens (gauche-droite, droite-gauche, bas-haut, diagonale).
+
+Ces deux styles échangent des carreaux entre les pans : le total commandé ne change pas, la part de chaque pan oui. Les couleurs primaire, secondaire et tertiaire de chaque motif sont lues au chargement de son image, avec une seule couleur pour un uni. Elles se corrigent dans *Carreaux & motifs*, et *Lire les couleurs des images* les relit.
+
 ## Préparer le projet avec une IA
 
 **Préparer avec une IA** ouvre Claude, ChatGPT, Le Chat ou Gemini avec une consigne prête à l'emploi. Tu ajoutes tes photos et ta référence de carreaux dans la discussion, puis tu colles la réponse dans Calepineur, qui la vérifie et résume les changements avant de les appliquer. Les images restent à charger dans l'app, et les cotes estimées sont à vérifier au mètre.
@@ -56,7 +64,7 @@ En local, `pnpm test:e2e` utilise le Chrome installé sur la machine. Pour un au
 
 ## Organisation
 
-- `src/core/` : calcul pur, sans interface. `lattice.ts` réseau de pose (seul fichier qui connaît la forme du carreau), `compute.ts` coupes, `designs.ts` répartition des motifs, `order.ts` quantités, `optimize.ts` grille, `harmony.ts` note et recherche de répartitions, `aiPrompt.ts` et `aiReply.ts` échanges avec une IA, `photo.ts` projection sur la photo, `project.ts` format de fichier et validation, `demo.ts` projet d'exemple.
+- `src/core/` : calcul pur, sans interface. `lattice.ts` réseau de pose (seul fichier qui connaît la forme du carreau), `compute.ts` coupes, `designs.ts` répartition des motifs, `order.ts` quantités, `optimize.ts` grille, `harmony.ts` note et recherche de répartitions, `palette.ts` couleurs des motifs et parenté, `aiPrompt.ts` et `aiReply.ts` échanges avec une IA, `photo.ts` projection sur la photo, `project.ts` format de fichier et validation, `demo.ts` projet d'exemple.
 - `src/store/` : état, annulation, sauvegarde et outils de la scène.
 - `src/components/` : interface React.
 - `tests/e2e/` : parcours complets dans un vrai navigateur.

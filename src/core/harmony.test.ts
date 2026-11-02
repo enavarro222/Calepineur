@@ -159,13 +159,13 @@ describe('harmonyProposals', () => {
 
   it('est reproductible', () => {
     const { p, comps } = demo();
-    expect(harmonyProposals(p, comps, 1)[0]!.assignment).toEqual(harmonyProposals(p, comps, 1)[0]!.assignment);
+    expect(harmonyProposals(p, comps, 'natural', 1)[0]!.assignment).toEqual(harmonyProposals(p, comps, 'natural', 1)[0]!.assignment);
   });
 
   it('ne modifie pas le projet d\'origine', () => {
     const { p, comps } = demo();
     const before = JSON.stringify(p);
-    harmonyProposals(p, comps, 1);
+    harmonyProposals(p, comps, 'natural', 1);
     expect(JSON.stringify(p)).toBe(before);
   });
 
@@ -251,5 +251,85 @@ describe('harmonyProposals', () => {
     const copy = structuredClone(p);
     applyAssignment(copy, best!.assignment);
     expect(harmonyReport(copy, comps).score).toBe(best!.report.score);
+  });
+});
+
+describe('styles de couleur', () => {
+  // Du marine au sable : chaque motif partage sa secondaire avec le suivant.
+  const CHAIN = ['#202830', '#3c4a52', '#58707a', '#7a9488', '#a0ad92', '#c8bfa0', '#e8dcc0'];
+  const colored = (): Design[] => CHAIN.map((c, i) => ({ ...design('ABCDEFG'[i]!, c), colors: [c, CHAIN[Math.min(i + 1, 6)]!] }));
+  const two = () => ready({
+    designs: colored(),
+    walls: [
+      wall({ id: 'w1', W: 160, H: 70, zone: [[-10, -10], [-10, 80], [170, 80], [170, -10]] }),
+      wall({ id: 'w2', W: 160, H: 70, ox: 8 - 160, zone: [[-10, -10], [-10, 80], [170, 80], [170, -10]] }),
+    ],
+  });
+  const index = (key: string | null | undefined) => 'ABCDEFG'.indexOf(key ?? '');
+
+  it('garde le total de chaque motif, en échangeant entre les pans', () => {
+    const { p, comps } = two();
+    const before = orderCounts(p, comps);
+    for (const style of ['waves', 'gradient'] as const) {
+      for (const { project: next } of harmonyProposals(p, comps, style)) {
+        const after = orderCounts(next, comps);
+        for (const d of p.designs) expect(after.per[d.key]!.total).toBe(before.per[d.key]!.total);
+      }
+    }
+  });
+
+  it('fait un dégradé du sombre au clair, dans le sens de chaque proposition', () => {
+    const { p, comps } = two();
+    const props = harmonyProposals(p, comps, 'gradient');
+    expect(props.map(x => x.label)).toEqual([
+      'A à gauche, G à droite', 'G à gauche, A à droite', 'A en bas, G en haut',
+      'En diagonale : A en bas à gauche, G en haut à droite',
+    ]);
+    // le long des deux pans mis bout à bout : le pan 1, puis le pan 2
+    const mean = (x: Project, wallIndex: number) => {
+      const ts = comps[wallIndex]!.tiles;
+      return ts.reduce((s, t) => s + index(x.walls[wallIndex]!.tiles[t.key]!.d), 0) / ts.length;
+    };
+    expect(mean(props[0]!.project, 0)).toBeLessThan(mean(props[0]!.project, 1) - 1.5);
+    expect(mean(props[1]!.project, 0)).toBeGreaterThan(mean(props[1]!.project, 1) + 1.5);
+  });
+
+  it('évite les voisins identiques et rapproche les couleurs voisines', () => {
+    const { p, comps } = two();
+    const start = harmonyReport({ ...p, style: 'waves' }, comps).counts.clash;
+    for (const style of ['waves', 'gradient'] as const) {
+      const [best] = harmonyProposals(p, comps, style);
+      expect(best!.report.counts.adjacent).toBe(0);
+      expect(best!.report.counts.clash).toBeLessThan(start * 0.75);
+    }
+  });
+
+  it('retient le style choisi, et l\'oublie en revenant au naturel', () => {
+    const { p, comps } = two();
+    const [wave] = harmonyProposals(p, comps, 'waves', 1);
+    expect(wave!.project.style).toBe('waves');
+    const [natural] = harmonyProposals(wave!.project, comps, 'natural', 1);
+    expect(natural!.project.style).toBeUndefined();
+    expect(harmonyProposals(wave!.project, comps, undefined, 1)[0]!.style).toBe('waves');
+  });
+
+  it('ne compte pas les taches ni les amas, voulus, mais les voisins sans couleur commune', () => {
+    const { p, comps } = ready(); // motifs gris identiques : tout est parent
+    paintAll(p, comps, (q, r) => 'ABC'[((q + 2 * r) % 3 + 3) % 3]!);
+    const fixture = project();
+    const distinct = { ...p, designs: fixture.designs, style: 'waves' as const }; // rouge, vert, bleu : rien en commun
+    const rep = harmonyReport(distinct, comps);
+    expect(rep.counts.clash).toBeGreaterThan(0);
+    expect(rep.counts.tone + rep.counts.clump).toBe(0);
+    expect(harmonyReport({ ...distinct, style: undefined }, comps).counts.clash).toBe(0);
+  });
+
+  it('ne déplace pas les carreaux verrouillés', () => {
+    const { p, comps } = two();
+    const keys = comps[1]!.tiles.slice(0, 10).map(t => t.key);
+    for (const k of keys) p.walls[1]!.tiles[k]!.lk = true;
+    for (const { assignment } of harmonyProposals(p, comps, 'gradient')) {
+      for (const k of keys) expect(assignment[1]![k]).toBe(p.walls[1]!.tiles[k]!.d);
+    }
   });
 });

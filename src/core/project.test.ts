@@ -7,6 +7,16 @@ import { project, wall } from '../test/fixtures';
 const PNG = 'data:image/png;base64,AAAA';
 
 describe('parseProject', () => {
+  it('garde les couleurs des motifs et le style d\'harmonie', () => {
+    const raw = JSON.parse(JSON.stringify(project({ style: 'gradient' })));
+    raw.designs[0].colors = ['#112233', 'bleu', '#445566', '#778899', '#aabbcc'];
+    const p = parseProject(raw);
+    expect(p.designs[0]!.colors).toEqual(['#112233', '#445566', '#778899']);
+    expect(p.designs[1]!.colors).toBeUndefined();
+    expect(p.style).toBe('gradient');
+    expect(parseProject({ ...raw, style: 'n\'importe' }).style).toBeUndefined();
+  });
+
   it('relit un projet sans le changer', () => {
     const p = demoProject();
     expect(parseProject(JSON.parse(JSON.stringify(p)))).toEqual(p);
