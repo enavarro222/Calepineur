@@ -427,3 +427,37 @@ test('ne laisse pas Harmoniser seul sur une ligne', async ({ page }) => {
   const harmonize = (await page.getByRole('button', { name: 'Harmoniser' }).boundingBox())!;
   expect(Math.abs(harmonize.y - tools.y)).toBeLessThan(4);
 });
+
+// Régression : l'image rétrécie dans un cadre plus large décalait les carreaux par rapport à la vue du pan.
+test('cale les carreaux de la vue d\'ensemble comme sur la photo du pan', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.goto('./');
+  await page.locator('aside input[type=file]').setInputFiles(await pngFile(page, 'haute.png', 900, 1200, '#cfc8bb'));
+  const relative = async (layer: string) => page.evaluate(sel => {
+    const tiles = document.querySelector(sel)!.getBoundingClientRect();
+    const img = document.querySelector(sel)!.parentElement!.querySelector('img')!.getBoundingClientRect();
+    return [(tiles.left - img.left) / img.width, (tiles.top - img.top) / img.height, tiles.width / img.width, tiles.height / img.height];
+  }, layer);
+  await page.getByRole('button', { name: 'Peindre' }).click();
+  await expect(page.locator('#stage .ph-tiles')).toBeVisible();
+  const detail = await relative('#stage .ph-tiles');
+
+  await page.getByRole('button', { name: 'Vue d\'ensemble' }).click();
+  await page.getByText('Photos des pans', { exact: true }).click();
+  const layer = page.getByTestId('photo-layer').first();
+  await expect(layer).toBeVisible();
+  const frame = (await page.locator('.overview-photo .photo-wrap').first().boundingBox())!;
+  const img = (await page.locator('.overview-photo .ph-img').first().boundingBox())!;
+  expect(Math.abs(frame.width - img.width)).toBeLessThan(1);
+  const overview = await relative('.overview-photo [data-testid=photo-layer]');
+  overview.forEach((v, k) => expect(Math.abs(v - detail[k]!)).toBeLessThan(0.01));
+
+  // même photo en photo d'ensemble : le pan reprend son calage tel quel
+  await page.getByText('Photo d\'ensemble', { exact: true }).click();
+  await page.getByText('Choisir la photo d\'ensemble…').locator('input').setInputFiles(await pngFile(page, 'haute.png', 900, 1200, '#cfc8bb'));
+  await page.getByLabel('Caler un pan').selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Reprendre le calage de sa photo' }).click();
+  await page.getByLabel('Caler un pan').selectOption({ index: 0 });
+  const global = await relative('.overview-big [data-testid=photo-layer]');
+  global.forEach((v, k) => expect(Math.abs(v - detail[k]!)).toBeLessThan(0.01));
+});

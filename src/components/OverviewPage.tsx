@@ -4,7 +4,7 @@ import { cm } from '../core/format';
 import { unfold } from '../core/layout';
 import { defaultCalib } from '../core/photo';
 import { imageUrl } from '../core/project';
-import { moveOverviewPoint, removeOverview, uploadOverview } from '../store/actions';
+import { copyWallCalib, moveOverviewPoint, removeOverview, uploadOverview } from '../store/actions';
 import { commit, getProject, setUi, useStore } from '../store/store';
 import { FileButton, NumField, SegRadio } from './fields';
 import { PhotoComposite, type PhotoScale } from './PhotoComposite';
@@ -140,6 +140,10 @@ function GlobalView() {
       {calibWall && (
         <div className="overview-calib">
           <p className="hint">Place les 4 pastilles jaunes de « {calibWall.name} » sur les points du mur dont tu connais la position (coins, angle au ras du plan de travail, bas de hotte…), et saisis-la ici en cm.</p>
+          {calibWall.photo && (
+            <button disabled={!photoSize} title="Si la photo d'ensemble est celle de ce pan, son calage s'applique tel quel"
+              onClick={() => photoSize && void copyWallCalib(calibWall.id, photoSize.nw, photoSize.nh)}>Reprendre le calage de sa photo</button>
+          )}
           {ov.walls[calibWall.id] ? (
             <table className="calib">
               <thead><tr><th>#</th><th>x (cm)</th><th>y (cm)</th></tr></thead>

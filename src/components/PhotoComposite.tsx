@@ -52,7 +52,7 @@ export function PhotoComposite({ project, images, src, alt, layers, opacity, ble
   }, [measure]);
 
   return (
-    <div className={`photo-wrap ${className ?? ''}`}>
+    <div className={`photo-wrap composite ${className ?? ''}`}>
       <img ref={imgRef} className="ph-img" alt={alt} draggable={false} src={src} onLoad={measure} />
       {scale && layers.map(l => {
         const matrix = calibMatrix(l.pts, l.wall.H, scale.s);

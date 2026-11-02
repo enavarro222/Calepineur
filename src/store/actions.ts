@@ -194,6 +194,26 @@ export async function uploadOverview(file: File): Promise<void> {
   }
 }
 
+// Quand la photo d'ensemble est la photo d'un pan (même cadrage), son calage se reprend tel quel, à l'échelle.
+export async function copyWallCalib(wallId: string, nw: number, nh: number): Promise<void> {
+  const w = getProject().walls.find(x => x.id === wallId);
+  const url = imageUrl(w?.photo?.src, useStore.getState().images);
+  if (!w?.photo || !url) return;
+  try {
+    const size = await imageSize(url);
+    const sx = nw / size.w;
+    const sy = nh / size.h;
+    if (Math.abs(sx - sy) > 0.02 * sx) {
+      showToast('Les deux photos n\'ont pas le même cadrage : place les pastilles à la main.');
+      return;
+    }
+    const pts = w.photo.pts.map(pt => ({ ...pt, px: pt.px * sx, py: pt.py * sy }));
+    commit(p => { if (p.overview) p.overview.walls[wallId] = pts; });
+  } catch (e) {
+    fileError(e);
+  }
+}
+
 export function removeOverview(): void {
   commit(p => { delete p.overview; });
   removeUnusedImages(getProject());
