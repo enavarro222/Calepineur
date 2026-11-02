@@ -55,6 +55,11 @@ describe('resolveConfig', () => {
 });
 
 describe('mergeAiProject', () => {
+  it('garde la photo d\'ensemble, que l\'IA ne voit pas', () => {
+    const overview = { src: 'img:ens', opacity: 1, blend: true, walls: {} };
+    expect(mergeAiProject(project({ overview }), project({ name: 'Par IA' })).overview).toEqual(overview);
+  });
+
   const photo = { src: 'img:p', opacity: 1, blend: true, pts: [] };
 
   it('garde photo et retouches des murs conservés', () => {

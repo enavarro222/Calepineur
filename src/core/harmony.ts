@@ -13,15 +13,34 @@
 import { produce } from 'immer';
 import type { WallComp } from './compute';
 import { hashStr, mulberry32 } from './geom';
+import { unfold } from './layout';
 import { colorAffinity, colorChain } from './palette';
 import type { HarmonyStyle, Point, Project } from './types';
 
 export type DefectType = 'adjacent' | 'line' | 'pattern' | 'clump' | 'tone' | 'clash';
 
+export interface TileRef {
+  wall: number;
+  key: string;
+}
+
+// Un défaut peut passer l'angle entre deux pans : chaque carreau dit à quel pan il appartient.
 export interface Defect {
   type: DefectType;
-  wall: number;
+  cells: TileRef[];
+}
+
+// Ce qu'un pan montre d'un défaut : ses propres carreaux.
+export interface WallDefect {
+  type: DefectType;
   keys: string[];
+}
+
+export function defectsOnWall(defects: Defect[], wall: number): WallDefect[] {
+  return defects.flatMap(d => {
+    const keys = d.cells.filter(c => c.wall === wall).map(c => c.key);
+    return keys.length ? [{ type: d.type, keys }] : [];
+  });
 }
 
 export interface HarmonyReport {
@@ -36,6 +55,8 @@ interface Cell {
   wall: number;
   key: string;
   c: Point;
+  u: Point; // position dans la suite de pans reliés par un angle, dépliée à plat
+  run: number;
   gx: number; // abscisse le long de la suite des pans
   frac: number;
   locked: boolean;
@@ -89,6 +110,8 @@ const TONE_LINE_RADIUS = 2.1;
 const AXIS_STEPS = [1, Math.sqrt(3), 2];
 const RING2_RADIUS = 2.1; // en distance entre carreaux voisins
 const FULL_RING1 = 6;
+const SPLIT_TILE = 0.5; // en distance entre voisins : en dessous, deux morceaux d'un même emplacement
+const SPOT_TOLERANCE = 0.2;
 const VISIBLE_FRAC = 0.2; // en dessous, le morceau se voit trop peu pour compter comme défaut
 const TONE_MIN_SPREAD = 0.05;
 const TONE_Z = 0.6;
@@ -122,13 +145,18 @@ function toneScores(project: Project, cells: Cell[]): number[] {
 
 function buildCells(project: Project, comps: WallComp[]): Cell[] {
   const index = new Map(project.designs.map((d, i) => [d.key, i]));
+  const places = unfold(project.walls);
   let offset = 0;
   return project.walls.flatMap((w, wall) => {
     const x0 = offset;
     offset += w.W;
+    const { run, x0: ux } = places[wall]!;
     return comps[wall]!.tiles.map((t): Cell => {
       const a = w.tiles[t.key];
-      return { wall, key: t.key, c: t.c, gx: x0 + t.c[0], frac: t.frac, locked: !!a?.lk, design: index.get(a?.d ?? '') ?? -1 };
+      return {
+        wall, key: t.key, c: t.c, u: [ux + t.c[0], t.c[1]], run, gx: x0 + t.c[0], frac: t.frac,
+        locked: !!a?.lk, design: index.get(a?.d ?? '') ?? -1,
+      };
     });
   });
 }
@@ -147,19 +175,39 @@ function chainRanks(project: Project, cells: Cell[], chain: number[]): number[] 
   return rank;
 }
 
-function buildLines(comp: WallComp, wallCells: number[], at: Map<string, number>, lines: Line[], cells: Cell[]): void {
-  const g = comp.g;
-  for (const a of wallCells) {
+// Retrouve le carreau posé à un endroit de la suite dépliée, même de l'autre côté d'un angle.
+function spotFinder(runCells: number[], cells: Cell[], d: number): (x: number, y: number) => number | undefined {
+  const q = d / 2;
+  const grid = new Map<string, number[]>();
+  for (const i of runCells) {
+    const k = `${Math.round(cells[i]!.u[0] / q)},${Math.round(cells[i]!.u[1] / q)}`;
+    grid.set(k, [...(grid.get(k) ?? []), i]);
+  }
+  return (x, y) => {
+    const gx = Math.round(x / q);
+    const gy = Math.round(y / q);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const hit = grid.get(`${gx + dx},${gy + dy}`)?.find(i => Math.hypot(cells[i]!.u[0] - x, cells[i]!.u[1] - y) < SPOT_TOLERANCE * d);
+        if (hit !== undefined) return hit;
+      }
+    }
+    return undefined;
+  };
+}
+
+function buildLines(runCells: number[], cells: Cell[], d: number, lines: Line[]): void {
+  const spot = spotFinder(runCells, cells, d);
+  for (const a of runCells) {
     const ca = cells[a]!;
-    for (const b of wallCells) {
+    for (const b of runCells) {
       const cb = cells[b]!;
-      const vx = cb.c[0] - ca.c[0];
-      const vy = cb.c[1] - ca.c[1];
-      const step = Math.hypot(vx, vy) / g.d;
-      if (a === b || step > PATTERN_RADIUS || vx < -1e-6 || (Math.abs(vx) < 1e-6 && vy < 0)) continue;
-      const n = g.nearest(cb.c[0] + vx, cb.c[1] + vy, comp.ox, comp.oy);
-      const c = at.get(`${n.q},${n.r}`);
-      if (c === undefined) continue;
+      const vx = cb.u[0] - ca.u[0];
+      const vy = cb.u[1] - ca.u[1];
+      const step = Math.hypot(vx, vy) / d;
+      if (a === b || step < SPLIT_TILE || step > PATTERN_RADIUS || vx < -1e-6 || (Math.abs(vx) < 1e-6 && vy < 0)) continue;
+      const c = spot(cb.u[0] + vx, cb.u[1] + vy);
+      if (c === undefined || c === a || c === b) continue;
       const f = Math.min(ca.frac, cb.frac, cells[c]!.frac);
       const axis = AXIS_STEPS.some(k => Math.abs(step - k) < 0.01);
       lines.push({
@@ -182,18 +230,20 @@ function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): M
   const ring1: number[][] = cells.map(() => []);
   const ring2: number[][] = cells.map(() => []);
 
-  comps.forEach((comp, wall) => {
-    const wallCells = cells.flatMap((c, i) => (c.wall === wall ? [i] : []));
-    const at = new Map(wallCells.map(i => [cells[i]!.key, i]));
-    const d = comp.g.d;
-    for (let x = 0; x < wallCells.length; x++) {
-      for (let y = x + 1; y < wallCells.length; y++) {
-        const a = wallCells[x]!;
-        const b = wallCells[y]!;
+  // Les voisinages suivent la suite dépliée des pans : deux carreaux de part et d'autre d'un angle sont voisins.
+  const d = comps[0]?.g.d ?? 1;
+  const runs = new Map<number, number[]>();
+  cells.forEach((c, i) => runs.set(c.run, [...(runs.get(c.run) ?? []), i]));
+  for (const runCells of runs.values()) {
+    for (let x = 0; x < runCells.length; x++) {
+      for (let y = x + 1; y < runCells.length; y++) {
+        const a = runCells[x]!;
+        const b = runCells[y]!;
         const ca = cells[a]!;
         const cb = cells[b]!;
-        const dist = Math.hypot(ca.c[0] - cb.c[0], ca.c[1] - cb.c[1]) / d;
-        if (dist > RING2_RADIUS) continue;
+        const dist = Math.hypot(ca.u[0] - cb.u[0], ca.u[1] - cb.u[1]) / d;
+        // deux morceaux du même emplacement, coupé par l'angle : ce sont deux coupes, pas deux voisins
+        if (dist > RING2_RADIUS || dist < SPLIT_TILE) continue;
         const f = Math.min(ca.frac, cb.frac);
         const near = 1 / dist ** 2;
         pairs.push({ a, b, same: f * (dist < 1.1 ? ADJACENT_COST : NEAR_COST * near), tone: TONE_COST * near, adjacent: dist < 1.1 });
@@ -205,18 +255,19 @@ function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): M
         }
       }
     }
-    buildLines(comp, wallCells, at, lines, cells);
-  });
+    buildLines(runCells, cells, d, lines);
+  }
 
   const pairsOf: number[][] = cells.map(() => []);
   pairs.forEach((p, i) => { pairsOf[p.a]!.push(i); pairsOf[p.b]!.push(i); });
   const linesOf: number[][] = cells.map(() => []);
   lines.forEach((l, i) => { linesOf[l.a]!.push(i); linesOf[l.b]!.push(i); linesOf[l.c]!.push(i); });
-  return { cells, pairs, lines, ring1, ring2, toneZ, pairsOf, linesOf, style, affinity, chain, rank: chainRanks(project, cells, chain), step: comps[0]?.g.d ?? 1 };
+  return { cells, pairs, lines, ring1, ring2, toneZ, pairsOf, linesOf, style, affinity, chain, rank: chainRanks(project, cells, chain), step: d };
 }
 
 // ---- rapport ----
 const isVisible = (c: Cell): boolean => c.frac >= VISIBLE_FRAC && c.design >= 0;
+const ref = (c: Cell): TileRef => ({ wall: c.wall, key: c.key });
 
 function clumpDefects(m: Model, project: Project): Defect[] {
   const total = project.designs.map(() => 0);
@@ -234,7 +285,7 @@ function clumpDefects(m: Model, project: Project): Defect[] {
     if (same.length + 1 < Math.max(CLUMP_MIN, 1.8 * expected) || seen.has(i)) continue;
     const group = [i, ...same];
     group.forEach(g => seen.add(g));
-    defects.push({ type: 'clump', wall: c.wall, keys: group.map(g => m.cells[g]!.key) });
+    defects.push({ type: 'clump', cells: group.map(g => ref(m.cells[g]!)) });
   }
   return defects;
 }
@@ -254,7 +305,7 @@ function toneRuns(m: Model, side: (i: number) => number): Defect[] {
     }
     const run = [l.a, l.b, l.c];
     for (let n = next.get(`${l.b},${l.c}`); n && side(n.c) === s; n = next.get(`${n.b},${n.c}`)) run.push(n.c);
-    if (run.length >= TONE_RUN) defects.push({ type: 'tone', wall: m.cells[l.a]!.wall, keys: run.map(i => m.cells[i]!.key) });
+    if (run.length >= TONE_RUN) defects.push({ type: 'tone', cells: run.map(i => ref(m.cells[i]!)) });
   }
   return defects;
 }
@@ -266,7 +317,7 @@ function toneDefects(m: Model): Defect[] {
     return isVisible(c) ? sideOf(m.toneZ[c.design]!) : 0;
   };
   const seen = new Set<number>();
-  m.cells.forEach((c, start) => {
+  m.cells.forEach((_, start) => {
     const s = side(start);
     if (!s || seen.has(start)) return;
     const patch = [start];
@@ -279,7 +330,7 @@ function toneDefects(m: Model): Defect[] {
         }
       }
     }
-    if (patch.length >= TONE_PATCH) defects.push({ type: 'tone', wall: c.wall, keys: patch.map(i => m.cells[i]!.key) });
+    if (patch.length >= TONE_PATCH) defects.push({ type: 'tone', cells: patch.map(i => ref(m.cells[i]!)) });
   });
   return [...defects, ...toneRuns(m, side)];
 }
@@ -291,7 +342,7 @@ function clashDefects(m: Model): Defect[] {
       const ca = m.cells[a]!;
       const cb = m.cells[b]!;
       if (a < b && ca.design !== cb.design && isVisible(ca) && isVisible(cb) && m.affinity[ca.design]![cb.design]! < CLASH_MAX) {
-        defects.push({ type: 'clash', wall: ca.wall, keys: [ca.key, cb.key] });
+        defects.push({ type: 'clash', cells: [ref(ca), ref(cb)] });
       }
     }
   });
@@ -305,13 +356,13 @@ function report(m: Model, project: Project): HarmonyReport {
     for (const b of ns) {
       const ca = cells[a]!;
       const cb = cells[b]!;
-      if (a < b && ca.design === cb.design && isVisible(ca) && isVisible(cb)) defects.push({ type: 'adjacent', wall: ca.wall, keys: [ca.key, cb.key] });
+      if (a < b && ca.design === cb.design && isVisible(ca) && isVisible(cb)) defects.push({ type: 'adjacent', cells: [ref(ca), ref(cb)] });
     }
   });
   for (const l of m.lines) {
     const [a, b, c] = [cells[l.a]!, cells[l.b]!, cells[l.c]!];
     if (l.shown && a.design === b.design && b.design === c.design && isVisible(a) && isVisible(b) && isVisible(c)) {
-      defects.push({ type: l.axis ? 'line' : 'pattern', wall: a.wall, keys: [a.key, b.key, c.key] });
+      defects.push({ type: l.axis ? 'line' : 'pattern', cells: [ref(a), ref(b), ref(c)] });
     }
   }
   // Dans les styles de couleur, les taches de teinte et les amas sont voulus ; on signale plutôt les voisins sans
@@ -466,19 +517,29 @@ export interface Proposal {
   project: Project;
   report: HarmonyReport;
   style: HarmonyStyle;
+  variant: number; // sens du dégradé
   label: string;
+}
+
+// Retient le style choisi : Mélanger en tire ensuite de nouvelles variantes.
+export function applyStyle(project: Project, style: HarmonyStyle, variant: number): void {
+  project.style = style;
+  if (style === 'gradient') project.styleVariant = variant;
+  else delete project.styleVariant;
 }
 
 // Plusieurs recherches indépendantes : la meilleure note n'est pas forcément la plus belle, l'œil choisit.
 // Pour le dégradé, chaque proposition prend un sens différent.
-export function harmonyProposals(project: Project, comps: WallComp[], style: HarmonyStyle = project.style ?? 'natural', count = PROPOSALS): Proposal[] {
+// first : numéro de la première proposition, qui fixe aussi le sens du dégradé.
+export function harmonyProposals(project: Project, comps: WallComp[], style: HarmonyStyle = project.style ?? 'natural', count = PROPOSALS, first = 0): Proposal[] {
   const m = buildModel(project, comps, style);
   const name = (i: number | undefined): string => {
     const d = i === undefined ? undefined : project.designs[i];
     return d ? d.name || d.key : '';
   };
   const ends = [name(m.chain[0]), name(m.chain[m.chain.length - 1])] as const;
-  const proposals = Array.from({ length: count }, (_, k): Proposal => {
+  const proposals = Array.from({ length: count }, (_, n): Proposal => {
+    const k = first + n;
     const seed = `harmonie:${style}:${project.seed}:${k}`;
     const d = search(m, seed, styleTarget(m, k, seed));
     const assignment: Assignment = {};
@@ -486,13 +547,13 @@ export function harmonyProposals(project: Project, comps: WallComp[], style: Har
       const design = project.designs[d[i]!];
       if (design) (assignment[c.wall] ??= {})[c.key] = design.key;
     });
+    const variant = style === 'gradient' ? k % GRADIENT_DIRECTIONS.length : 0;
     const next = produce(project, draft => {
       applyAssignment(draft, assignment);
-      if (style === 'natural') delete draft.style;
-      else draft.style = style;
+      applyStyle(draft, style, variant);
     });
-    const label = style === 'gradient' ? GRADIENT_DIRECTIONS[k % GRADIENT_DIRECTIONS.length]!.label(ends[0], ends[1]) : '';
-    return { assignment, project: next, report: harmonyReport(next, comps), style, label };
+    const label = style === 'gradient' ? GRADIENT_DIRECTIONS[variant]!.label(ends[0], ends[1]) : '';
+    return { assignment, project: next, report: harmonyReport(next, comps), style, variant, label };
   });
   // L'ordre des sens du dégradé parle de lui-même ; les autres propositions vont de la meilleure note à la moins bonne.
   return style === 'gradient' ? proposals : proposals.sort((a, b) => b.report.score - a.report.score);

@@ -9,6 +9,7 @@ import { uploadPhoto } from '../store/actions';
 import { getProject, useStore, type View } from '../store/store';
 import { hoverInfo, isDragging, moveDrag, press, release, type HoverInfo, type StagePoint } from '../store/tools';
 import { useHarmony } from '../store/harmony';
+import { defectsOnWall } from '../core/harmony';
 import { FileButton } from './fields';
 import { WallSvg } from './WallSvg';
 
@@ -90,7 +91,7 @@ export function Stage({ i, onHover }: StageProps) {
   }, [measure]);
 
   const src = wall ? imageUrl(wall.photo?.src, images) : '';
-  const defects = useMemo(() => (showDefects ? harmony.defects.filter(d => d.wall === i) : undefined), [showDefects, harmony, i]);
+  const defects = useMemo(() => (showDefects ? defectsOnWall(harmony.defects, i) : undefined), [showDefects, harmony, i]);
   if (!wall || !comp) return null;
   const selected = swapFrom?.wallId === wall.id ? swapFrom.key : null;
 

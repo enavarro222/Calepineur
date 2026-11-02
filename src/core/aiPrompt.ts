@@ -60,13 +60,15 @@ Encode le JSON comme encodeURIComponent, en encodant aussi les parenthèses (%28
 ${APP_URL}#config=%7B%22tile%22%3A%7B%22F%22%3A15%7D%7D
 L'application montre les changements et attend la validation de l'utilisateur. Au-delà de 4000 caractères, donne plutôt le bloc JSON, à coller dans la fenêtre « Préparer avec une IA ».`;
 
-// Le projet envoyé à l'IA ne contient ni image ni réglage carreau par carreau.
+// Le projet envoyé à l'IA ne contient ni image (photo d'ensemble comprise) ni réglage carreau par carreau.
 function promptProject(project: Project): Project {
-  return {
+  const sent: Project = {
     ...project,
     designs: project.designs.map(d => ({ ...d, img: '' })),
     walls: project.walls.map(w => ({ ...w, photo: null, tiles: {} })),
   };
+  delete sent.overview;
+  return sent;
 }
 
 // compact : pour les liens préremplis, dont la longueur est limitée.

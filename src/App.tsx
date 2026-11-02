@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AiDialog, ConfigReview } from './components/AiDialog';
 import { HarmonyDialog } from './components/HarmonyDialog';
+import { OverviewPage } from './components/OverviewPage';
 import { OrderPage } from './components/OrderPage';
 import { PrintPage } from './components/PrintPage';
 import { TilesPage } from './components/TilesPage';
@@ -10,7 +11,7 @@ import { addWall, exportProject, importFile, printPlan } from './store/actions';
 import { closeInvite, inviteClosed } from './store/persistence';
 import { getProject, getUi, redo, setUi, undo, useStore, wallIndex } from './store/store';
 
-const PAGES: [string, string][] = [['tiles', 'Carreaux & motifs'], ['order', 'Commande'], ['print', 'Calepinage']];
+const PAGES: [string, string][] = [['overview', 'Vue d\'ensemble'], ['tiles', 'Carreaux & motifs'], ['order', 'Commande'], ['print', 'Calepinage']];
 
 function Tabs() {
   const tab = useStore(s => s.ui.tab);
@@ -122,6 +123,7 @@ export function App() {
       {kind === 'wall' && <WallTabs />}
       <main id="main" className={`main-${kind}`}>
         {kind === 'wall' && <WallPage key={i} i={i} />}
+        {kind === 'overview' && <OverviewPage />}
         {kind === 'tiles' && <TilesPage />}
         {kind === 'order' && <OrderPage />}
         {kind === 'print' && <PrintPage />}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { round1 } from '../core/geom';
+import { joinsPrevious } from '../core/layout';
 import type { Point, Wall } from '../core/types';
 import { clearBrush, deleteWall, linkToPrevious, optimize, removePhoto, uploadPhoto } from '../store/actions';
 import { commit, showToast, useStore } from '../store/store';
@@ -35,6 +36,7 @@ function ZoneText({ i, wall }: { i: number; wall: Wall }) {
 export function WallSidebar({ i }: { i: number }) {
   const wall = useStore(s => s.project.walls[i]);
   const prevName = useStore(s => s.project.walls[i - 1]?.name);
+  const joined = useStore(s => joinsPrevious(s.project.walls, i));
   if (!wall) return null;
 
   const edit = (path: string, fn: (w: Wall) => void) => commit(p => fn(p.walls[i]!), { coalesce: `walls.${i}.${path}` });
@@ -67,6 +69,15 @@ export function WallSidebar({ i }: { i: number }) {
           <button title="Cherche le meilleur décalage horizontal et vertical" onClick={() => optimize(i, true)}>Optimiser ↔↕</button>
           {i > 0 && <button title="Continue le motif de la grille du pan précédent à travers l'angle" onClick={() => linkToPrevious(i)}>Raccorder à « {prevName} »</button>}
         </div>
+        {i > 0 && (
+          <>
+            <label className="inline">
+              <input type="checkbox" checked={joined} onChange={e => edit('joinPrev', w => { w.joinPrev = e.target.checked; })} />
+              Angle commun avec « {prevName} »
+            </label>
+            <p className="hint">Le bord droit de « {prevName} » touche le bord gauche de ce pan. Harmoniser regarde alors les voisins à travers l'angle, et la vue d'ensemble met les deux pans côte à côte.</p>
+          </>
+        )}
       </section>
 
       <section>

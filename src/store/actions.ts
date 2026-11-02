@@ -1,32 +1,43 @@
 // Actions de l'interface qui ne se limitent pas à changer une valeur.
+import { produce } from 'immer';
 import { demoProject } from '../core/demo';
 import { computeWalls } from '../core/compute';
 import { pruneTiles, shuffleDesigns } from '../core/designs';
 import { cm } from '../core/format';
-import { applyAssignment, type Assignment } from '../core/harmony';
+import { applyAssignment, applyStyle, harmonyProposals, type Assignment } from '../core/harmony';
 import { colLetters, round1 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import { optimizeGrid } from '../core/optimize';
-import { calibPoints } from '../core/photo';
+import { calibPoints, defaultCalib } from '../core/photo';
 import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
 import type { HarmonyStyle, Project, Wall } from '../core/types';
 import { averageColor, cropImage, dominantColors, imageSize, readImageFile } from '../lib/images';
 import { removeUnusedImages, writeImage } from './persistence';
 import { commit, getComps, getProject, mutate, replaceProject, setUi, showToast, useStore } from './store';
 
+// Nouvelle répartition. Si un style d'harmonie a été choisi, elle en tire une nouvelle variante, dans le même sens.
 export function shuffle(keepLocked: boolean): void {
-  commit(p => {
+  const comps = getComps();
+  const mixed = produce(getProject(), p => {
     p.seed = (p.seed || 0) + 1;
-    shuffleDesigns(p, getComps(), keepLocked);
-    pruneTiles(p, getComps());
+    shuffleDesigns(p, comps, keepLocked);
+    pruneTiles(p, comps);
   });
+  const style = mixed.style;
+  const next = style ? harmonyProposals(mixed, comps, style, 1, mixed.styleVariant ?? 0)[0]?.project ?? mixed : mixed;
+  commit(p => {
+    p.seed = next.seed;
+    p.walls = next.walls;
+  });
+  if (style) showToast(`Nouvelle répartition, style « ${STYLE_NAMES[style]} » conservé.`);
 }
 
-export function chooseProposal(assignment: Assignment, style: HarmonyStyle): void {
+const STYLE_NAMES: Record<HarmonyStyle, string> = { natural: 'Naturel', waves: 'Vagues de couleur', gradient: 'Dégradé' };
+
+export function chooseProposal(assignment: Assignment, style: HarmonyStyle, variant = 0): void {
   commit(p => {
     applyAssignment(p, assignment);
-    if (style === 'natural') delete p.style;
-    else p.style = style;
+    applyStyle(p, style, variant);
   });
   setUi({ harmonyOpen: false });
   showToast('Répartition appliquée. Les quantités à commander ne changent pas.');
@@ -54,6 +65,7 @@ export function linkToPrevious(i: number): void {
     const prev = p.walls[i - 1]!;
     p.walls[i]!.ox = round1(prev.ox - prev.W);
     p.walls[i]!.oy = prev.oy;
+    p.walls[i]!.joinPrev = true;
   });
   showToast('Grille raccordée : les rangs continuent à travers l\'angle (épaisseur du carreau négligée).');
 }
@@ -144,16 +156,10 @@ export async function uploadPhoto(i: number, file: File): Promise<void> {
     let prepared = false;
     commit(p => {
       const w = p.walls[i]!;
-      const H = Math.min(w.H, 80);
       prepared = !!w.calib;
       w.photo = {
         src, opacity: 1, blend: true,
-        pts: w.calib ? calibPoints(w.calib, r.w, r.h) : [
-          { wx: 0, wy: 0, px: r.w * .15, py: r.h * .75 },
-          { wx: w.W, wy: 0, px: r.w * .85, py: r.h * .75 },
-          { wx: w.W, wy: H, px: r.w * .85, py: r.h * .4 },
-          { wx: 0, wy: H, px: r.w * .15, py: r.h * .4 },
-        ],
+        pts: w.calib ? calibPoints(w.calib, r.w, r.h) : defaultCalib(w, r.w, r.h),
       };
       delete w.calib;
     });
@@ -169,6 +175,37 @@ export async function uploadPhoto(i: number, file: File): Promise<void> {
 export function removePhoto(i: number): void {
   commit(p => { p.walls[i]!.photo = null; });
   removeUnusedImages(getProject());
+}
+
+// Photo d'ensemble : chaque pan démarre calé sur une portion de la photo, de gauche à droite, à ajuster ensuite.
+export async function uploadOverview(file: File): Promise<void> {
+  try {
+    const r = await readImageFile(file, 2400);
+    const src = storeImage(r.url);
+    commit(p => {
+      const n = p.walls.length;
+      const walls = Object.fromEntries(p.walls.map((w, k) => [w.id, defaultCalib(w, r.w, r.h, (k + 0.1) / n, (k + 0.9) / n)]));
+      p.overview = { src, opacity: p.overview?.opacity ?? 1, blend: p.overview?.blend ?? true, walls };
+    });
+    removeUnusedImages(getProject());
+    showToast('Cale maintenant chaque pan : place ses 4 pastilles sur les points indiqués de la photo.', 6000);
+  } catch (e) {
+    fileError(e);
+  }
+}
+
+export function removeOverview(): void {
+  commit(p => { delete p.overview; });
+  removeUnusedImages(getProject());
+}
+
+export function moveOverviewPoint(wallId: string, k: number, px: number, py: number): void {
+  commit(p => {
+    const pt = p.overview?.walls[wallId]?.[k];
+    if (!pt) return;
+    pt.px = px;
+    pt.py = py;
+  }, { coalesce: `overview.${wallId}.${k}` });
 }
 
 export async function uploadDesignImage(k: number, file: File): Promise<void> {

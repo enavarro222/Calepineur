@@ -13,7 +13,7 @@ export type Tool = 'paint' | 'rotate' | 'swap' | 'toggle' | 'zone' | 'obst' | 'g
 export type View = 'plan' | 'photo';
 
 export interface UiState {
-  tab: string; // 'wall:<i>', 'tiles', 'order' ou 'print'
+  tab: string; // 'wall:<i>', 'overview', 'tiles', 'order' ou 'print'
   view: Record<number, View>;
   tool: Tool;
   design: string | null;

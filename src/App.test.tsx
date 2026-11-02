@@ -354,6 +354,30 @@ describe('harmonie', () => {
     expect(getProject().style).toBe('waves');
   });
 
+  it('garde le style et le sens choisis quand on mélange', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Harmoniser' }));
+    const dialog = screen.getByRole('dialog', { name: 'Harmoniser la répartition' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Dégradé' }));
+    const cards = await within(dialog).findAllByTestId('proposal');
+    await user.click(within(cards[2]!).getByRole('button', { name: 'Choisir' }));
+    const chosen = getProject();
+    expect(chosen).toMatchObject({ style: 'gradient', styleVariant: 2 });
+    await user.click(screen.getByRole('button', { name: 'Mélanger' }));
+    const mixed = getProject();
+    expect(mixed).toMatchObject({ style: 'gradient', styleVariant: 2 });
+    expect(mixed.walls.map(w => w.tiles)).not.toEqual(chosen.walls.map(w => w.tiles));
+    expect(orderCounts(mixed, getComps()).toOrder).toBe(orderCounts(chosen, getComps()).toOrder);
+    expect(screen.getByTestId('harmony')).not.toHaveTextContent(/voisins? identiques?/);
+  });
+
+  it('mélange au hasard tant qu\'aucun style n\'est choisi', async () => {
+    const { user } = setup();
+    expect(getProject().style).toBeUndefined();
+    await user.click(screen.getByRole('button', { name: 'Mélanger' }));
+    expect(getProject().style).toBeUndefined();
+  });
+
   it('se ferme avec Échap sans rien changer', async () => {
     const { user } = setup();
     const before = getProject();

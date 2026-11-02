@@ -3,7 +3,7 @@ import { memo, type ReactNode } from 'react';
 import type { PlacedTile, WallComp } from '../core/compute';
 import { cm, fmt } from '../core/format';
 import { mpCentroid } from '../core/geom';
-import type { Defect, DefectType } from '../core/harmony';
+import type { DefectType, WallDefect } from '../core/harmony';
 import type { Lattice } from '../core/lattice';
 import { imageUrl, type ImageStore } from '../core/project';
 import type { Design, MultiPolygon, Point, Project, TileOverride, Wall } from '../core/types';
@@ -54,13 +54,13 @@ export interface WallSvgProps {
   outlines?: boolean;
   k?: number;
   bare?: boolean; // sans règles ni marges, pour les miniatures
-  defects?: Defect[];
+  defects?: WallDefect[];
   selected?: string | null;
 }
 
 export const DEFECT_COLORS: Record<DefectType, string> = { adjacent: '#d6202e', line: '#ef7d00', pattern: '#0b6fd0', clump: '#8a2be2', tone: '#111111', clash: '#e0a100' };
 
-function DefectMarks({ comp, defects, sy, r, sw, fs }: { comp: WallComp; defects: Defect[]; sy: (y: number) => number; r: number; sw: number; fs: number }) {
+function DefectMarks({ comp, defects, sy, r, sw, fs }: { comp: WallComp; defects: WallDefect[]; sy: (y: number) => number; r: number; sw: number; fs: number }) {
   const center = (key: string): string => {
     const c = comp.byKey.get(key)!.c;
     return `${fmt(c[0])},${fmt(sy(c[1]))}`;
@@ -70,7 +70,8 @@ function DefectMarks({ comp, defects, sy, r, sw, fs }: { comp: WallComp; defects
     <g data-testid="defects" pointerEvents="none" fill="none">
       {known.map((d, i) => {
         const stroke = DEFECT_COLORS[d.type];
-        if (d.type === 'adjacent' || d.type === 'line' || d.type === 'pattern' || d.type === 'clash') {
+        // un défaut qui passe l'angle n'a parfois qu'un carreau sur ce pan : on l'entoure
+        if ((d.type === 'adjacent' || d.type === 'line' || d.type === 'pattern' || d.type === 'clash') && d.keys.length > 1) {
           return <polyline key={i} data-defect={d.type} points={d.keys.map(center).join(' ')} stroke={stroke} strokeWidth={fmt(sw * 5)} strokeLinecap="round" />;
         }
         return (

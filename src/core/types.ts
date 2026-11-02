@@ -92,7 +92,16 @@ export interface Wall {
   obstacles: Obstacle[];
   photo: WallPhoto | null;
   calib?: CalibHint[];
+  joinPrev?: boolean; // bord gauche contre le bord droit du pan précédent (angle commun)
   tiles: Record<string, TileOverride>;
+}
+
+// Photo de toute la pièce : chaque pan y est calé sur ses propres repères, pour voir l'ensemble d'un coup d'œil.
+export interface Overview {
+  src: string;
+  opacity: number;
+  blend: boolean;
+  walls: Record<string, CalibPoint[]>; // calage de chaque pan, par identifiant de pan
 }
 
 export interface Project {
@@ -101,7 +110,9 @@ export interface Project {
   tile: TileSpec;
   rotMode: RotMode;
   seed: number;
-  style?: HarmonyStyle; // style de la dernière répartition harmonisée
+  style?: HarmonyStyle; // style de la dernière répartition harmonisée, que Mélanger conserve
+  styleVariant?: number; // sens du dégradé
   designs: Design[];
   walls: Wall[];
+  overview?: Overview;
 }

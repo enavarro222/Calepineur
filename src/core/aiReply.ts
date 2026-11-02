@@ -114,8 +114,10 @@ const mergeDesign = (next: Design, current: Design | undefined): Design =>
 
 // L'IA ne voit ni les images ni les retouches : on garde celles des murs et des motifs qu'elle a conservés.
 export function mergeAiProject(current: Project, next: Project): Project {
+  const { overview } = current;
   return {
     ...next,
+    ...(overview ? { overview } : {}),
     designs: next.designs.map(d => mergeDesign(d, current.designs.find(c => c.key === d.key))),
     walls: next.walls.map(w => mergeWall(w, current.walls.find(c => c.id === w.id))),
   };

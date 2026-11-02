@@ -36,13 +36,15 @@ export function Toolbar({ i }: { i: number }) {
           </button>
         ))}
       </div>
-      <div className="seg">
-        <button className={on(ui.labels)} title="Étiquettes des carreaux" onClick={() => setUi({ labels: !ui.labels })}>Repères</button>
-        <button className={on(ui.defects)} title="Surligne les voisins identiques, alignements, répétitions, amas et taches" onClick={() => setUi({ defects: !ui.defects })}>Défauts</button>
-        {view === 'plan' && <button className={on(ui.cuts)} title="Contour des carreaux coupés" onClick={() => setUi({ cuts: !ui.cuts })}>Coupes</button>}
+      <div className="toolbar-end">
+        <div className="seg">
+          <button className={on(ui.labels)} title="Étiquettes des carreaux" onClick={() => setUi({ labels: !ui.labels })}>Repères</button>
+          <button className={on(ui.defects)} title="Surligne les voisins identiques, alignements, répétitions, amas et taches" onClick={() => setUi({ defects: !ui.defects })}>Défauts</button>
+          {view === 'plan' && <button className={on(ui.cuts)} title="Contour des carreaux coupés" onClick={() => setUi({ cuts: !ui.cuts })}>Coupes</button>}
+        </div>
+        <button title="Nouvelle répartition (garde les carreaux peints à la main, et le style choisi dans Harmoniser)" onClick={() => shuffle(true)}>Mélanger</button>
+        <button className="primary" title="Cherche plusieurs répartitions plus harmonieuses, à quantités égales" onClick={() => setUi({ harmonyOpen: true })}>Harmoniser</button>
       </div>
-      <button title="Nouvelle répartition aléatoire (garde les carreaux peints à la main)" onClick={() => shuffle(true)}>Mélanger</button>
-      <button className="primary" title="Cherche plusieurs répartitions plus harmonieuses, à quantités égales" onClick={() => setUi({ harmonyOpen: true })}>Harmoniser</button>
     </div>
   );
 }

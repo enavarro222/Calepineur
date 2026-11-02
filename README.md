@@ -12,10 +12,11 @@ Calepineur gère aujourd'hui les carreaux hexagonaux.
 
 1. **Carreaux & motifs** : taille réelle du carreau (plat à plat), joint, orientation, motifs et leurs poids.
 2. **Chaque pan** : largeur et hauteur mesurées, éléments (fenêtre, hotte, prises, meubles), zone à carreler avec *Pinceau zone* (glisser sur les carreaux pour en ajouter ou en retirer, en vue Plan ou Photo) ou *Contour zone* (déplacer les points du contour). Les cotes partent du coin bas-gauche, au ras du plan de travail.
-3. **Grille** : *Optimiser* cherche le décalage qui gâche le moins de carreaux et évite les petites coupes ; *Raccorder* prolonge la grille du pan précédent à travers l'angle.
+3. **Grille** : *Optimiser* cherche le décalage qui gâche le moins de carreaux et évite les petites coupes ; *Raccorder* prolonge la grille du pan précédent à travers l'angle. *Angle commun* indique que le pan touche le précédent (coché d'office pour une grille raccordée).
 4. **Vue Photo** : *Caler la photo* (4 repères aux cotes connues) montre le rendu sur la vraie pièce.
-5. **Motifs** : *Mélanger*, ou peindre et pivoter carreau par carreau (touches 1 à 9 pour choisir le motif). *Harmoniser* propose plusieurs répartitions à choisir, *Défauts* surligne ce qui accroche l'œil, et *Échanger* intervertit deux carreaux à la main.
-6. **Commande**, puis **Calepinage** → Imprimer / PDF : plan étiqueté, repères de traçage et vignettes cotées de chaque coupe.
+5. **Vue d'ensemble** : tous les pans à la fois, en plan déplié (les pans reliés par un angle se suivent), sur leurs photos côte à côte, ou sur une photo de toute la pièce où chaque pan se cale sur ses propres repères.
+6. **Motifs** : *Mélanger*, ou peindre et pivoter carreau par carreau (touches 1 à 9 pour choisir le motif). *Harmoniser* propose plusieurs répartitions à choisir, *Défauts* surligne ce qui accroche l'œil, et *Échanger* intervertit deux carreaux à la main.
+7. **Commande**, puis **Calepinage** → Imprimer / PDF : plan étiqueté, repères de traçage et vignettes cotées de chaque coupe.
 
 Le mélange équilibre les quantités et évite deux motifs identiques côte à côte. Cette règle n'est garantie qu'à partir de 7 motifs, car un carreau a 6 voisins.
 
@@ -27,7 +28,9 @@ Harmoniser propose trois styles :
 - **Vagues de couleur** : les voisins partagent une couleur, et les teintes se regroupent en vagues irrégulières.
 - **Dégradé** : les motifs suivent leur couleur dominante, du plus sombre au plus clair, avec une proposition par sens (gauche-droite, droite-gauche, bas-haut, diagonale).
 
-Ces deux styles échangent des carreaux entre les pans : le total commandé ne change pas, la part de chaque pan oui. Les couleurs primaire, secondaire et tertiaire de chaque motif sont lues au chargement de son image, avec une seule couleur pour un uni. Elles se corrigent dans *Carreaux & motifs*, et *Lire les couleurs des images* les relit.
+Les voisinages traversent les angles communs : deux carreaux de part et d'autre d'un angle ne doivent pas être identiques, et les deux morceaux d'un carreau coupé par l'angle ne comptent pas comme voisins. Une fois un style choisi, *Mélanger* en tire une nouvelle variante, dans le même sens pour un dégradé.
+
+Les styles Vagues et Dégradé échangent des carreaux entre les pans : le total commandé ne change pas, la part de chaque pan oui. Les couleurs primaire, secondaire et tertiaire de chaque motif sont lues au chargement de son image, avec une seule couleur pour un uni. Elles se corrigent dans *Carreaux & motifs*, et *Lire les couleurs des images* les relit.
 
 ## Préparer le projet avec une IA
 
@@ -64,7 +67,7 @@ En local, `pnpm test:e2e` utilise le Chrome installé sur la machine. Pour un au
 
 ## Organisation
 
-- `src/core/` : calcul pur, sans interface. `lattice.ts` réseau de pose (seul fichier qui connaît la forme du carreau), `compute.ts` coupes, `designs.ts` répartition des motifs, `order.ts` quantités, `optimize.ts` grille, `harmony.ts` note et recherche de répartitions, `palette.ts` couleurs des motifs et parenté, `aiPrompt.ts` et `aiReply.ts` échanges avec une IA, `photo.ts` projection sur la photo, `project.ts` format de fichier et validation, `demo.ts` projet d'exemple.
+- `src/core/` : calcul pur, sans interface. `lattice.ts` réseau de pose (seul fichier qui connaît la forme du carreau), `compute.ts` coupes, `designs.ts` répartition des motifs, `order.ts` quantités, `optimize.ts` grille, `harmony.ts` note et recherche de répartitions, `palette.ts` couleurs des motifs et parenté, `layout.ts` pans reliés par un angle, `aiPrompt.ts` et `aiReply.ts` échanges avec une IA, `photo.ts` projection sur la photo, `project.ts` format de fichier et validation, `demo.ts` projet d'exemple.
 - `src/store/` : état, annulation, sauvegarde et outils de la scène.
 - `src/components/` : interface React.
 - `tests/e2e/` : parcours complets dans un vrai navigateur.

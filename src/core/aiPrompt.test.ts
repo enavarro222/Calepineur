@@ -20,7 +20,9 @@ describe('buildPrompt', () => {
     const p = demoProject();
     p.walls[0]!.tiles = { '1,1': { d: 'A' } };
     p.walls[0]!.photo = { src: 'img:secret', opacity: 1, blend: true, pts: [] };
+    p.overview = { src: 'img:ensemble', opacity: 1, blend: true, walls: {} };
     const text = buildPrompt(p);
+    expect(text).not.toContain('img:ensemble');
     expect(text).toContain('Mur fenêtre');
     expect(text).not.toContain('data:image');
     expect(text).not.toContain('img:secret');

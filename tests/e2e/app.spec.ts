@@ -391,3 +391,39 @@ test('le site reste chargeable depuis un sous-dossier', () => {
   expect(html).toMatch(/src="\.\/assets\//);
   expect(html).not.toMatch(/(src|href)="\/[^/]/);
 });
+
+test('montre tous les pans en plan déplié et sur une photo d\'ensemble calée', async ({ page }) => {
+  const errors = failOnConsoleErrors(page);
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Vue d\'ensemble' }).click();
+  await page.getByText('Plan déplié', { exact: true }).click();
+  const walls = page.locator('.overview-wall');
+  await expect(walls).toHaveCount(2);
+
+  await page.getByText('Photo d\'ensemble', { exact: true }).click();
+  await page.getByText('Choisir la photo d\'ensemble…').locator('input').setInputFiles(await pngFile(page, 'piece.png', 1200, 700, '#d9d2c4'));
+  await expect(page.getByTestId('photo-layer')).toHaveCount(2);
+
+  // calage du premier pan : une pastille déplacée suit la souris, et le pan suit sa pastille
+  await page.getByLabel('Caler un pan').selectOption({ index: 1 });
+  const handle = page.locator('[data-handle=overview] circle').first();
+  await handle.scrollIntoViewIfNeeded();
+  const box = (await handle.boundingBox())!;
+  const before = await page.getByTestId('photo-layer').first().getAttribute('style');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 40, box.y + 30, { steps: 5 });
+  await page.mouse.up();
+  const moved = (await handle.boundingBox())!;
+  expect(moved.x).toBeGreaterThan(box.x + 25);
+  expect(await page.getByTestId('photo-layer').first().getAttribute('style')).not.toBe(before);
+  await expectNoErrors(errors);
+});
+
+test('ne laisse pas Harmoniser seul sur une ligne', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await page.goto('./');
+  const tools = (await page.getByRole('button', { name: 'Mélanger' }).boundingBox())!;
+  const harmonize = (await page.getByRole('button', { name: 'Harmoniser' }).boundingBox())!;
+  expect(Math.abs(harmonize.y - tools.y)).toBeLessThan(4);
+});

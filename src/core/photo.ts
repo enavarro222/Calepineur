@@ -4,11 +4,12 @@ import type { CalibHint, CalibPoint, Point, Wall } from './types';
 
 export const PHOTO_K = 6; // px par cm du calque projeté sur la photo
 
-export function photoH(wall: Wall): Homography | null {
-  const pts = wall.photo?.pts;
+export function calibH(pts: CalibPoint[] | undefined): Homography | null {
   if (pts?.length !== 4) return null;
   return homography(pts.map((p): Point => [p.wx, p.wy]), pts.map((p): Point => [p.px, p.py]));
 }
+
+export const photoH = (wall: Wall): Homography | null => calibH(wall.photo?.pts);
 
 export function calibPoints(calib: CalibHint[], w: number, h: number): CalibPoint[] {
   return calib.map(c => ({ wx: c.wx, wy: c.wy, px: c.u * w, py: c.v * h }));
@@ -18,12 +19,25 @@ export function isCalibUsable(calib: CalibHint[]): boolean {
   return homography(calib.map((c): Point => [c.wx, c.wy]), calib.map((c): Point => [c.u, c.v])) !== null;
 }
 
-// Matrice CSS du calque SVG (px, y vers le bas) vers l'image affichée à l'échelle s.
-export function photoMatrix(wall: Wall, s: number): string | null {
-  const Hw = photoH(wall);
+// Matrice CSS du calque SVG d'un pan de hauteur H (px, y vers le bas) vers l'image affichée à l'échelle s.
+export function calibMatrix(pts: CalibPoint[] | undefined, H: number, s: number): string | null {
+  const Hw = calibH(pts);
   if (!Hw) return null;
-  const A = [1 / PHOTO_K, 0, 0, 0, -1 / PHOTO_K, wall.H, 0, 0, 1];
+  const A = [1 / PHOTO_K, 0, 0, 0, -1 / PHOTO_K, H, 0, 0, 1];
   const raw = mulH([s, 0, 0, 0, s, 0, 0, 0, 1], mulH(Hw, A));
   const M = raw.map(v => v / raw[8]!);
   return `matrix3d(${M[0]},${M[3]},0,${M[6]},${M[1]},${M[4]},0,${M[7]},0,0,1,0,${M[2]},${M[5]},0,${M[8]})`;
+}
+
+export const photoMatrix = (wall: Wall, s: number): string | null => calibMatrix(wall.photo?.pts, wall.H, s);
+
+// Repères de départ d'un pan sur une photo w × h : ses coins, dans un rectangle de la photo.
+export function defaultCalib(wall: Pick<Wall, 'W' | 'H'>, w: number, h: number, u0 = 0.15, u1 = 0.85): CalibPoint[] {
+  const H = Math.min(wall.H, 80);
+  return [
+    { wx: 0, wy: 0, px: w * u0, py: h * 0.75 },
+    { wx: wall.W, wy: 0, px: w * u1, py: h * 0.75 },
+    { wx: wall.W, wy: H, px: w * u1, py: h * 0.4 },
+    { wx: 0, wy: H, px: w * u0, py: h * 0.4 },
+  ];
 }

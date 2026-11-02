@@ -36,7 +36,7 @@ header { display: flex; align-items: center; gap: 14px; padding: 8px 14px; backg
 
 main { flex: 1; min-height: 0; display: flex; }
 .main-wall { overflow: hidden; }
-.main-tiles, .main-order, .main-print { overflow: auto; }
+.main-tiles, .main-order, .main-print, .main-overview { overflow: auto; }
 #page { flex: 1; }
 
 /* ---- panneau latéral ---- */
@@ -65,7 +65,7 @@ table.obst input { padding: 3px 3px; font-size: 12px; }
 
 /* ---- zone de travail ---- */
 .work { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+#toolbar { display: flex; flex-wrap: wrap; gap: 8px; row-gap: 6px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .palette { display: flex; gap: 3px; }
 .palette button { padding: 2px 4px 2px 2px; gap: 2px; font-size: 11px; font-weight: 600; border-color: transparent; }
 .palette button.on { border-color: var(--accent); background: var(--accent-soft); }
@@ -209,3 +209,30 @@ table.designs td > input[type=color] { width: 30px; }
 /* Le texte de survol a sa propre ligne : il ne doit jamais changer la hauteur de la scène pendant un geste. */
 .status .hov { order: 3; flex: 1 0 100%; min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status .harmony-status { text-align: left; }
+
+/* ---- vue d'ensemble ---- */
+.overview { padding: 12px 16px 30px; display: flex; flex-direction: column; gap: 12px; }
+.overview-bar { max-width: 640px; }
+.overview-plan { display: flex; flex-direction: column; gap: 22px; }
+.overview-run { display: flex; align-items: flex-end; }
+.overview-wall { margin: 0; min-width: 0; }
+.overview-wall svg { display: block; width: 100%; height: auto; }
+.overview-wall.joined { border-left: 2px dashed #1f6f8b; }
+.overview-wall figcaption, .overview-photo figcaption { font-size: 12px; color: var(--muted); text-align: center; margin-top: 4px; }
+.overview-photos { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.overview-photo { margin: 0; flex: 1 1 360px; min-width: 0; }
+.overview-photo .ph-img { max-height: 55vh; width: 100%; height: auto; object-fit: contain; }
+.overview-missing { border: 1px dashed var(--line); border-radius: var(--radius); padding: 24px; text-align: center; color: var(--muted); background: var(--panel); }
+.overview-missing.big { max-width: 640px; }
+.overview-global { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; }
+.overview-global > .overview-tools, .overview-global > .overview-big { grid-column: 1; }
+.overview-global > .overview-calib { grid-column: 2; grid-row: 1 / span 2; width: 260px; }
+@media (max-width: 820px) { .overview-global { grid-template-columns: minmax(0, 1fr); } .overview-global > .overview-calib { grid-column: 1; grid-row: auto; width: auto; } }
+.overview-tools { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.overview-tools label { margin: 0; }
+.overview-big { align-self: flex-start; }
+.overview-big .ph-img { max-height: calc(100vh - 200px); }
+.ph-over .handle { cursor: grab; touch-action: none; }
+
+/* les actions de fin de barre restent groupées : si la place manque, elles passent ensemble à la ligne, à droite */
+.toolbar-end { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-wrap: nowrap; }

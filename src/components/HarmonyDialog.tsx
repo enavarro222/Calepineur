@@ -47,7 +47,7 @@ export function HarmonyCounts() {
 function ProposalCard({ index, proposal }: { index: number; proposal: Proposal }) {
   const comps = useStore(s => s.comps);
   const images = useStore(s => s.images);
-  const { project, report, assignment, style, label } = proposal;
+  const { project, report, assignment, style, variant, label } = proposal;
   return (
     <article className="proposal" data-testid="proposal">
       <h3>Proposition {index + 1} <small>{report.score}/100</small></h3>
@@ -58,7 +58,7 @@ function ProposalCard({ index, proposal }: { index: number; proposal: Proposal }
         ))}
       </div>
       <p className="hint"><DefectList report={report} /></p>
-      <button className="primary" onClick={() => chooseProposal(assignment, style)}>Choisir</button>
+      <button className="primary" onClick={() => chooseProposal(assignment, style, variant)}>Choisir</button>
     </article>
   );
 }

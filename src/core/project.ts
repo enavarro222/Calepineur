@@ -1,6 +1,6 @@
 // Lecture et écriture du fichier projet. Le contenu importé est validé champ par champ.
 import { isHexColor, MAX_COLORS } from './palette';
-import type { BrushState, CalibHint, Design, DesignCrop, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
+import type { BrushState, CalibHint, CalibPoint, Design, Overview, DesignCrop, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
 
 export type ImageStore = Record<string, string>;
 
@@ -84,20 +84,31 @@ function parseObstacle(v: unknown, what: string): Obstacle {
   return { name: str(o.name), x: num(o.x, `${what}.x`), y: num(o.y, `${what}.y`), w: num(o.w, `${what}.w`), h: num(o.h, `${what}.h`) };
 }
 
+function parsePoints(v: unknown, what: string): CalibPoint[] {
+  const pts = arr(v, what);
+  if (pts.length !== 4) fail(`${what} : 4 repères attendus`);
+  return pts.map((c, i) => {
+    const q = obj(c, `${what}[${i}]`);
+    return { wx: num(q.wx, 'wx'), wy: num(q.wy, 'wy'), px: num(q.px, 'px'), py: num(q.py, 'py') };
+  });
+}
+
 function parsePhoto(v: unknown, what: string): WallPhoto | null {
   if (v == null) return null;
   const p = obj(v, what);
-  const pts = arr(p.pts, `${what}.pts`);
-  if (pts.length !== 4) fail(`${what}.pts : 4 repères attendus`);
   return {
     src: str(p.src),
     opacity: optNum(p.opacity, `${what}.opacity`, 1),
     blend: p.blend !== false,
-    pts: pts.map((c, i) => {
-      const q = obj(c, `${what}.pts[${i}]`);
-      return { wx: num(q.wx, 'wx'), wy: num(q.wy, 'wy'), px: num(q.px, 'px'), py: num(q.py, 'py') };
-    }),
+    pts: parsePoints(p.pts, `${what}.pts`),
   };
+}
+
+function parseOverview(v: unknown): Overview {
+  const o = obj(v, 'overview');
+  const walls: Record<string, CalibPoint[]> = {};
+  for (const [id, pts] of Object.entries(obj(o.walls ?? {}, 'overview.walls'))) walls[id] = parsePoints(pts, `overview.walls.${id}`);
+  return { src: str(o.src), opacity: optNum(o.opacity, 'overview.opacity', 1), blend: o.blend !== false, walls };
 }
 
 function parseCalib(v: unknown, what: string): CalibHint[] {
@@ -143,6 +154,7 @@ function parseWall(v: unknown, i: number): Wall {
     obstacles: arr(w.obstacles ?? [], `${what}.obstacles`).map((o, k) => parseObstacle(o, `${what}.obstacles[${k}]`)),
     photo: parsePhoto(w.photo, `${what}.photo`),
     ...(w.calib != null ? { calib: parseCalib(w.calib, `${what}.calib`) } : {}),
+    ...(typeof w.joinPrev === 'boolean' ? { joinPrev: w.joinPrev } : {}),
     tiles: parseTiles(w.tiles, `${what}.tiles`),
   };
 }
@@ -157,14 +169,16 @@ export function parseProject(v: unknown): Project {
     tile: parseTile(s.tile),
     rotMode: rot === '180' || rot === '60' ? rot : 'none',
     seed: optNum(s.seed, 'seed', 1),
-    ...(s.style === 'waves' || s.style === 'gradient' ? { style: s.style } : {}),
+    ...(s.style === 'natural' || s.style === 'waves' || s.style === 'gradient' ? { style: s.style } : {}),
+    ...(typeof s.styleVariant === 'number' && Number.isInteger(s.styleVariant) ? { styleVariant: s.styleVariant } : {}),
     designs: arr(s.designs, 'designs').map(parseDesign),
     walls: arr(s.walls, 'walls').map(parseWall),
+    ...(s.overview != null ? { overview: parseOverview(s.overview) } : {}),
   };
 }
 
 export function imageRefs(p: Project): string[] {
-  const refs = [...p.designs.map(d => d.img), ...p.walls.map(w => w.photo?.src ?? '')];
+  const refs = [...p.designs.map(d => d.img), ...p.walls.map(w => w.photo?.src ?? ''), p.overview?.src ?? ''];
   return refs.filter(r => r !== '' && !r.startsWith('data:'));
 }
 

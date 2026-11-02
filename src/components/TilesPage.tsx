@@ -148,7 +148,7 @@ export function TilesPage() {
             <button onClick={() => shuffle(true)}>Mélanger (garder mes choix)</button>
             <button onClick={() => { if (window.confirm('Re-mélanger tous les carreaux, y compris ceux peints ou pivotés à la main ?')) shuffle(false); }}>Tout re-mélanger</button>
           </div>
-          <p className="hint">Le mélange équilibre les quantités selon les poids et évite deux motifs identiques côte à côte. La rotation s'applique au prochain mélange.</p>
+          <p className="hint">Le mélange équilibre les quantités selon les poids et évite deux motifs identiques côte à côte. La rotation s'applique au prochain mélange. Si tu as choisi un style dans Harmoniser, le mélange en tire une nouvelle variante.</p>
         </section>
 
         <section className="card preview"><h3>Aperçu</h3><div id="tile-preview"><Preview /></div></section>

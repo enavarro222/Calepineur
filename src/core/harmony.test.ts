@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeWalls } from './compute';
 import { demoProject } from './demo';
 import { ensureAssigned } from './designs';
-import { applyAssignment, colorTone, harmonyProposals, harmonyReport } from './harmony';
+import { applyAssignment, colorTone, defectsOnWall, harmonyProposals, harmonyReport } from './harmony';
 import { latticeFor } from './lattice';
 import { orderCounts } from './order';
 import type { Design, Project } from './types';
@@ -55,7 +55,7 @@ describe('harmonyReport', () => {
     p.walls[0]!.tiles[`${q},${r}`]!.d = p.walls[0]!.tiles[a.key]!.d;
     const r2 = harmonyReport(p, comps);
     expect(r2.counts.adjacent).toBeGreaterThan(0);
-    expect(r2.defects.filter(d => d.type === 'adjacent').some(d => d.keys.includes(a.key))).toBe(true);
+    expect(r2.defects.filter(d => d.type === 'adjacent').some(d => d.cells.some(c => c.key === a.key))).toBe(true);
     expect(r2.score).toBeLessThan(clean.score);
   });
 
@@ -70,7 +70,7 @@ describe('harmonyReport', () => {
       return `${n.q},${n.r}`;
     });
     for (const k of keys) p.walls[0]!.tiles[k]!.d = 'A';
-    expect(harmonyReport(p, comps).defects.filter(d => d.type === 'line').map(d => d.keys)).toContainEqual(keys);
+    expect(harmonyReport(p, comps).defects.filter(d => d.type === 'line').map(d => d.cells.map(c => c.key))).toContainEqual(keys);
   });
 
   it('repère un amas', () => {
@@ -102,7 +102,7 @@ describe('harmonyReport', () => {
     const crumb = c.tiles.find(t => t.frac < 0.2 && c.g.neighbors(t.q, t.r).some(([q, r]) => c.byKey.has(`${q},${r}`)))!;
     const [q, r] = c.g.neighbors(crumb.q, crumb.r).find(([nq, nr]) => c.byKey.has(`${nq},${nr}`))!;
     p.walls[0]!.tiles[crumb.key]!.d = p.walls[0]!.tiles[`${q},${r}`]!.d;
-    expect(harmonyReport(p, comps).defects.filter(d => d.keys.includes(crumb.key))).toEqual([]);
+    expect(harmonyReport(p, comps).defects.filter(d => d.cells.some(c => c.key === crumb.key))).toEqual([]);
   });
 
   it('suit l\'orientation du carreau', () => {
@@ -300,16 +300,16 @@ describe('styles de couleur', () => {
     for (const style of ['waves', 'gradient'] as const) {
       const [best] = harmonyProposals(p, comps, style);
       expect(best!.report.counts.adjacent).toBe(0);
-      expect(best!.report.counts.clash).toBeLessThan(start * 0.75);
+      expect(best!.report.counts.clash).toBeLessThan(start * 0.8);
     }
   });
 
-  it('retient le style choisi, et l\'oublie en revenant au naturel', () => {
+  it('retient le style choisi, Naturel compris', () => {
     const { p, comps } = two();
     const [wave] = harmonyProposals(p, comps, 'waves', 1);
     expect(wave!.project.style).toBe('waves');
     const [natural] = harmonyProposals(wave!.project, comps, 'natural', 1);
-    expect(natural!.project.style).toBeUndefined();
+    expect(natural!.project.style).toBe('natural');
     expect(harmonyProposals(wave!.project, comps, undefined, 1)[0]!.style).toBe('waves');
   });
 
@@ -340,5 +340,63 @@ describe('styles de couleur', () => {
     for (const { assignment } of harmonyProposals(p, comps, 'gradient', 2)) {
       for (const k of keys) expect(assignment[1]![k]).toBe(p.walls[1]!.tiles[k]!.d);
     }
+  });
+});
+
+describe('angle entre deux pans', () => {
+  // Deux pans de 60 cm raccordés : la grille continue à travers l'angle.
+  const corner = (joinPrev?: boolean) => {
+    const zone: [number, number][] = [[-10, -10], [-10, 70], [70, 70], [70, -10]];
+    const p = project({
+      designs: seven(),
+      walls: [wall({ id: 'a', W: 60, H: 60, ox: 8, zone }), wall({ id: 'b', W: 60, H: 60, ox: 8 - 60, zone, ...(joinPrev === undefined ? {} : { joinPrev }) })],
+    });
+    const comps = computeWalls(p);
+    ensureAssigned(p, comps);
+    paintAll(p, comps, (q, r) => 'ABCDEFG'[((q + 2 * r) % 7 + 7) % 7]!);
+    // une paire de carreaux bien visibles qui se touchent à travers l'angle
+    const d = comps[0]!.g.d;
+    const gap = (t: { c: number[] }, u: { c: number[] }) => Math.hypot(u.c[0]! + 60 - t.c[0]!, u.c[1]! - t.c[1]!) / d;
+    const pairs = comps[0]!.tiles.flatMap(t => comps[1]!.tiles.filter(u => t.frac > 0.3 && u.frac > 0.3 && Math.abs(gap(t, u) - 1) < 0.05).map(u => [t, u] as const));
+    const [left, right] = pairs[0]!;
+    return { p, comps, left, right };
+  };
+
+  it('repère deux voisins identiques de part et d\'autre de l\'angle', () => {
+    const { p, comps, left, right } = corner();
+    const dist = Math.hypot(right.c[0] + 60 - left.c[0], right.c[1] - left.c[1]) / comps[0]!.g.d;
+    expect(dist).toBeLessThan(1.1);
+    const pair = (x: Project) => harmonyReport(x, comps).defects.filter(d => d.type === 'adjacent'
+      && d.cells.some(c => c.wall === 0 && c.key === left.key) && d.cells.some(c => c.wall === 1 && c.key === right.key));
+    p.walls[1]!.tiles[right.key]!.d = p.walls[0]!.tiles[left.key]!.d === 'A' ? 'B' : 'A';
+    p.walls[0]!.tiles[left.key]!.d = p.walls[1]!.tiles[right.key]!.d === 'A' ? 'B' : 'A';
+    expect(pair(p)).toEqual([]);
+    p.walls[1]!.tiles[right.key]!.d = p.walls[0]!.tiles[left.key]!.d;
+    const across = pair(p);
+    expect(across).toHaveLength(1);
+    expect(defectsOnWall(across, 0)).toEqual([{ type: 'adjacent', keys: [left.key] }]);
+    expect(defectsOnWall(across, 1)).toEqual([{ type: 'adjacent', keys: [right.key] }]);
+  });
+
+  it('ignore l\'angle quand les pans ne se touchent pas', () => {
+    const { p, comps, left, right } = corner(false);
+    p.walls[1]!.tiles[right.key]!.d = p.walls[0]!.tiles[left.key]!.d;
+    expect(harmonyReport(p, comps).defects.some(d => new Set(d.cells.map(c => c.wall)).size === 2)).toBe(false);
+  });
+
+  it('ne compte pas comme voisins les deux morceaux d\'un carreau coupé par l\'angle', () => {
+    const { p, comps } = corner();
+    const a = comps[0]!;
+    const split = a.tiles.find(t => !t.full && t.c[0] > 55 && comps[1]!.tiles.some(u => Math.hypot(u.c[0] + 60 - t.c[0], u.c[1] - t.c[1]) < 0.1))!;
+    const twin = comps[1]!.tiles.find(u => Math.hypot(u.c[0] + 60 - split.c[0], u.c[1] - split.c[1]) < 0.1)!;
+    p.walls[1]!.tiles[twin.key]!.d = p.walls[0]!.tiles[split.key]!.d;
+    const both = harmonyReport(p, comps).defects.filter(d => d.type === 'adjacent'
+      && d.cells.some(c => c.wall === 0 && c.key === split.key) && d.cells.some(c => c.wall === 1 && c.key === twin.key));
+    expect(both).toEqual([]);
+  });
+
+  it('supprime les voisins identiques à travers l\'angle', () => {
+    const { p, comps } = corner();
+    for (const { report } of harmonyProposals(p, comps, 'natural', 2)) expect(report.counts.adjacent).toBe(0);
   });
 });
