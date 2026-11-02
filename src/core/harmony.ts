@@ -95,7 +95,7 @@ const TONE_Z = 0.6;
 const TONE_PATCH = 4;
 const TONE_RUN = 4;
 const CLUMP_MIN = 4;
-const SAME_BOOST = 3; // avec une cible de couleur, deux voisins identiques deviennent tentants : on les interdit plus fort
+const SAME_BOOST = 8; // avec une cible de couleur, deux voisins identiques deviennent tentants : on les interdit plus fort
 const COLOR_COST = 4;
 const TARGET_COST = 22;
 const CLASH_MAX = 0.2; // parenté sous laquelle deux voisins n'ont pas de couleur commune
@@ -415,7 +415,7 @@ function search(m: Model, seed: string, target: number[] | null): number[] {
   });
   const movable = [...byWall.values()].filter(cells => cells.length > 1).flat();
   if (!movable.length) return d;
-  const steps = colorful ? Math.min(200000, movable.length * 1200) : Math.min(40000, movable.length * 300);
+  const steps = colorful ? Math.min(90000, movable.length * 700) : Math.min(40000, movable.length * 300);
   const startT = colorful ? 4 : 3;
   const endT = colorful ? 0.05 : 0.08;
   for (let s = 0; s < steps; s++) {
@@ -428,6 +428,25 @@ function search(m: Model, seed: string, target: number[] | null): number[] {
     const delta = costAround(m, i, j, d, target) - before;
     const T = startT * (endT / startT) ** (s / steps);
     if (delta > 0 && rng() >= Math.exp(-delta / T)) [d[i], d[j]] = [d[j]!, d[i]!];
+  }
+  // Finition : un carreau encore collé à son double essaie chaque échange possible et garde le meilleur.
+  for (const i of movable) {
+    if (!m.ring1[i]!.some(n => d[n] === d[i] && isVisible(m.cells[n]!))) continue;
+    const mates = byWall.get(colorful ? 0 : m.cells[i]!.wall)!;
+    let best = -1;
+    let bestDelta = 0;
+    for (const j of mates) {
+      if (d[i] === d[j] || (!colorful && shiftsTone(m, i, j, d))) continue;
+      const before = costAround(m, i, j, d, target);
+      [d[i], d[j]] = [d[j]!, d[i]!];
+      const delta = costAround(m, i, j, d, target) - before;
+      [d[i], d[j]] = [d[j]!, d[i]!];
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        best = j;
+      }
+    }
+    if (best >= 0) [d[i], d[best]] = [d[best]!, d[i]!];
   }
   return d;
 }

@@ -271,7 +271,7 @@ describe('styles de couleur', () => {
     const { p, comps } = two();
     const before = orderCounts(p, comps);
     for (const style of ['waves', 'gradient'] as const) {
-      for (const { project: next } of harmonyProposals(p, comps, style)) {
+      for (const { project: next } of harmonyProposals(p, comps, style, 2)) {
         const after = orderCounts(next, comps);
         for (const d of p.designs) expect(after.per[d.key]!.total).toBe(before.per[d.key]!.total);
       }
@@ -324,11 +324,20 @@ describe('styles de couleur', () => {
     expect(harmonyReport({ ...distinct, style: undefined }, comps).counts.clash).toBe(0);
   });
 
+  it('reste rapide sur un grand projet', () => {
+    const big = project({ designs: colored(), walls: [wall({ W: 500, H: 150, zone: [[-10, -10], [-10, 160], [510, 160], [510, -10]] })] });
+    const comps = computeWalls(big);
+    ensureAssigned(big, comps);
+    const start = performance.now();
+    harmonyProposals(big, comps, 'gradient');
+    expect(performance.now() - start).toBeLessThan(8000);
+  });
+
   it('ne déplace pas les carreaux verrouillés', () => {
     const { p, comps } = two();
     const keys = comps[1]!.tiles.slice(0, 10).map(t => t.key);
     for (const k of keys) p.walls[1]!.tiles[k]!.lk = true;
-    for (const { assignment } of harmonyProposals(p, comps, 'gradient')) {
+    for (const { assignment } of harmonyProposals(p, comps, 'gradient', 2)) {
       for (const k of keys) expect(assignment[1]![k]).toBe(p.walls[1]!.tiles[k]!.d);
     }
   });
