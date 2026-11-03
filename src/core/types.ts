@@ -93,6 +93,7 @@ export interface Wall {
   photo: WallPhoto | null;
   calib?: CalibHint[];
   joinPrev?: boolean; // bord gauche contre le bord droit du pan précédent (angle commun)
+  joinDy?: number; // hauteur de son bas au-dessus du bas du pan précédent (cm, négatif s'il part plus bas)
   tiles: Record<string, TileOverride>;
 }
 

@@ -7,6 +7,7 @@ import { cm } from '../core/format';
 import { applyAssignment, applyStyle, harmonyProposals, type Assignment } from '../core/harmony';
 import { colLetters, round1 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
+import { joinDy } from '../core/layout';
 import { optimizeGrid } from '../core/optimize';
 import { calibPoints, defaultCalib, joinCalib } from '../core/photo';
 import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
@@ -64,10 +65,21 @@ export function linkToPrevious(i: number): void {
   commit(p => {
     const prev = p.walls[i - 1]!;
     p.walls[i]!.ox = round1(prev.ox - prev.W);
-    p.walls[i]!.oy = prev.oy;
+    p.walls[i]!.oy = round1(prev.oy - joinDy(p.walls[i]!));
     p.walls[i]!.joinPrev = true;
   });
   showToast('Grille raccordée : les rangs continuent à travers l\'angle (épaisseur du carreau négligée).');
+}
+
+// Une grille raccordée le reste : elle suit le pan quand son bas monte ou descend par rapport au précédent.
+export function setJoinDy(i: number, dy: number): void {
+  commit(p => {
+    const w = p.walls[i]!;
+    const prev = p.walls[i - 1];
+    if (prev && Math.abs(w.oy - (prev.oy - joinDy(w))) < 0.05) w.oy = round1(prev.oy - dy);
+    if (dy) w.joinDy = dy;
+    else delete w.joinDy;
+  }, { coalesce: `walls.${i}.joinDy` });
 }
 
 export function clearBrush(i: number): void {
@@ -220,7 +232,8 @@ export function joinOverviewCalib(wallId: string, neighbourId: string, side: 'le
   const n = p.walls.find(x => x.id === neighbourId);
   const pts = p.overview?.walls[wallId];
   const near = p.overview?.walls[neighbourId];
-  const next = w && n && pts && near ? joinCalib(pts, w, side, near, n) : null;
+  const dy = !w || !n ? 0 : side === 'left' ? joinDy(w) : -joinDy(n);
+  const next = w && n && pts && near ? joinCalib(pts, w, side, near, n, dy) : null;
   if (!next) {
     showToast('Raccord impossible : cale d\'abord le pan voisin.');
     return;

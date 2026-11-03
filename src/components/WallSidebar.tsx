@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { round1 } from '../core/geom';
 import { joinsPrevious } from '../core/layout';
 import type { Point, Wall } from '../core/types';
-import { clearBrush, deleteWall, linkToPrevious, optimize, removePhoto, uploadPhoto } from '../store/actions';
+import { clearBrush, deleteWall, linkToPrevious, optimize, removePhoto, setJoinDy, uploadPhoto } from '../store/actions';
 import { commit, showToast, useStore } from '../store/store';
 import { FileButton, NumField, SegRadio } from './fields';
 
@@ -76,6 +76,17 @@ export function WallSidebar({ i }: { i: number }) {
               Angle commun avec « {prevName} »
             </label>
             <p className="hint">Le bord droit de « {prevName} » touche le bord gauche de ce pan. Harmoniser regarde alors les voisins à travers l'angle, et la vue d'ensemble met les deux pans côte à côte.</p>
+            {joined && (
+              <>
+                <label>Décalage en hauteur avec « {prevName} » (cm)
+                  <NumField step={0.5} value={wall.joinDy ?? 0} onChange={v => setJoinDy(i, v)} />
+                </label>
+                <p className="hint">
+                  Hauteur du bas de ce pan au-dessus du bas de « {prevName} », négative s'il part plus bas. Par exemple −90 si ce pan part du sol
+                  et « {prevName} » du plan de travail, à 90 cm. Les pans dont le bas est au même niveau gardent 0.
+                </p>
+              </>
+            )}
           </>
         )}
       </section>

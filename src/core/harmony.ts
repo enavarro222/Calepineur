@@ -150,11 +150,11 @@ function buildCells(project: Project, comps: WallComp[]): Cell[] {
   return project.walls.flatMap((w, wall) => {
     const x0 = offset;
     offset += w.W;
-    const { run, x0: ux } = places[wall]!;
+    const { run, x0: ux, y0: uy } = places[wall]!;
     return comps[wall]!.tiles.map((t): Cell => {
       const a = w.tiles[t.key];
       return {
-        wall, key: t.key, c: t.c, u: [ux + t.c[0], t.c[1]], run, gx: x0 + t.c[0], frac: t.frac,
+        wall, key: t.key, c: t.c, u: [ux + t.c[0], uy + t.c[1]], run, gx: x0 + t.c[0], frac: t.frac,
         locked: !!a?.lk, design: index.get(a?.d ?? '') ?? -1,
       };
     });

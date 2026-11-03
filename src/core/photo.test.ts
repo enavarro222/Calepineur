@@ -82,6 +82,18 @@ describe('raccord de deux pans sur une même photo', () => {
     expect(pts[3]).toEqual(photo.pts[3]);
   });
 
+  // Le pan suivant part 30 cm plus bas : l'arête commune va de 30 à 90 cm sur lui, de 0 à 60 sur le précédent.
+  it('tient compte du décalage en hauteur entre les deux pans', () => {
+    const pts = joinCalib(far, { W: 200, H: 120 }, 'left', photo.pts, left, -30)!;
+    expect(pts.filter(p => p.wx === 0).map(p => p.wy).sort((u, v) => u - v)).toEqual([30, 90]);
+    for (const y of [0, 60]) {
+      const a = project(photo.pts, left, 100, y);
+      const b = project(pts, { W: 200, H: 120 }, 0, y + 30);
+      expect(b[0]).toBeCloseTo(a[0], 6);
+      expect(b[1]).toBeCloseTo(a[1], 6);
+    }
+  });
+
   it('sans calage du voisin, rien à raccorder', () => {
     expect(joinCalib(far, right, 'left', [], left)).toBeNull();
   });

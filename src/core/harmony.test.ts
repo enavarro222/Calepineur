@@ -344,19 +344,23 @@ describe('styles de couleur', () => {
 });
 
 describe('angle entre deux pans', () => {
-  // Deux pans de 60 cm raccordés : la grille continue à travers l'angle.
-  const corner = (joinPrev?: boolean) => {
+  // Deux pans de 60 cm raccordés : la grille continue à travers l'angle. Le second peut partir `dy` cm plus haut.
+  const corner = (joinPrev?: boolean, dy = 0) => {
     const zone: [number, number][] = [[-10, -10], [-10, 70], [70, 70], [70, -10]];
+    const raised = zone.map(([x, y]): [number, number] => [x, y - dy]);
     const p = project({
       designs: seven(),
-      walls: [wall({ id: 'a', W: 60, H: 60, ox: 8, zone }), wall({ id: 'b', W: 60, H: 60, ox: 8 - 60, zone, ...(joinPrev === undefined ? {} : { joinPrev }) })],
+      walls: [
+        wall({ id: 'a', W: 60, H: 60, ox: 8, zone }),
+        wall({ id: 'b', W: 60, H: 60 - dy, ox: 8 - 60, oy: 7 - dy, zone: raised, ...(dy ? { joinDy: dy } : {}), ...(joinPrev === undefined ? {} : { joinPrev }) }),
+      ],
     });
     const comps = computeWalls(p);
     ensureAssigned(p, comps);
     paintAll(p, comps, (q, r) => 'ABCDEFG'[((q + 2 * r) % 7 + 7) % 7]!);
     // une paire de carreaux bien visibles qui se touchent à travers l'angle
     const d = comps[0]!.g.d;
-    const gap = (t: { c: number[] }, u: { c: number[] }) => Math.hypot(u.c[0]! + 60 - t.c[0]!, u.c[1]! - t.c[1]!) / d;
+    const gap = (t: { c: number[] }, u: { c: number[] }) => Math.hypot(u.c[0]! + 60 - t.c[0]!, u.c[1]! + dy - t.c[1]!) / d;
     const pairs = comps[0]!.tiles.flatMap(t => comps[1]!.tiles.filter(u => t.frac > 0.3 && u.frac > 0.3 && Math.abs(gap(t, u) - 1) < 0.05).map(u => [t, u] as const));
     const [left, right] = pairs[0]!;
     return { p, comps, left, right };
@@ -376,6 +380,18 @@ describe('angle entre deux pans', () => {
     expect(across).toHaveLength(1);
     expect(defectsOnWall(across, 0)).toEqual([{ type: 'adjacent', keys: [left.key] }]);
     expect(defectsOnWall(across, 1)).toEqual([{ type: 'adjacent', keys: [right.key] }]);
+  });
+
+  it('suit le décalage en hauteur entre les deux pans', () => {
+    const { p, comps, left, right } = corner(undefined, -30);
+    const pair = (x: Project) => harmonyReport(x, comps).defects.filter(d => d.type === 'adjacent'
+      && d.cells.some(c => c.wall === 0 && c.key === left.key) && d.cells.some(c => c.wall === 1 && c.key === right.key));
+    p.walls[1]!.tiles[right.key]!.d = p.walls[0]!.tiles[left.key]!.d;
+    expect(pair(p)).toHaveLength(1);
+    // le même pan sans décalage : ces deux carreaux ne se touchent plus
+    delete p.walls[1]!.joinDy;
+    p.walls[1]!.joinPrev = true;
+    expect(pair(p)).toEqual([]);
   });
 
   it('ignore l\'angle quand les pans ne se touchent pas', () => {

@@ -155,6 +155,7 @@ function parseWall(v: unknown, i: number): Wall {
     photo: parsePhoto(w.photo, `${what}.photo`),
     ...(w.calib != null ? { calib: parseCalib(w.calib, `${what}.calib`) } : {}),
     ...(typeof w.joinPrev === 'boolean' ? { joinPrev: w.joinPrev } : {}),
+    ...(typeof w.joinDy === 'number' && Number.isFinite(w.joinDy) && w.joinDy !== 0 ? { joinDy: w.joinDy } : {}),
     tiles: parseTiles(w.tiles, `${what}.tiles`),
   };
 }

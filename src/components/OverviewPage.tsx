@@ -30,10 +30,13 @@ function PlanView() {
     <div className="overview-plan">
       {runs.map((run, k) => {
         const width = run.reduce((s, { w }) => s + w.W, 0);
+        const low = Math.min(...run.map(({ i }) => places[i]!.y0));
         return (
           <div key={k} className="overview-run" style={{ width: `${(100 * width) / widest}%` }}>
             {run.map(({ w, i }, j) => (
-              <figure key={w.id} className={j > 0 ? 'overview-wall joined' : 'overview-wall'} style={{ width: `${(100 * w.W) / width}%` }}>
+              // Une marge en % se rapporte à la largeur de la suite : même échelle que les pans.
+              <figure key={w.id} className={j > 0 ? 'overview-wall joined' : 'overview-wall'}
+                style={{ width: `${(100 * w.W) / width}%`, marginBottom: `${(100 * (places[i]!.y0 - low)) / width}%` }}>
                 <WallSvg project={project} wall={w} comp={comps[i]!} images={images} mode="print" uid={`o${i}`} bare />
                 <figcaption>{w.name || `Pan ${i + 1}`} · {cm(w.W)} × {cm(w.H)} cm</figcaption>
               </figure>
@@ -41,7 +44,7 @@ function PlanView() {
           </div>
         );
       })}
-      <p className="hint">Les pans reliés par un angle commun se suivent sans espace (réglage « Angle commun » de chaque pan).</p>
+      <p className="hint">Les pans reliés par un angle commun se suivent sans espace, à leur hauteur l'un par rapport à l'autre (réglages « Angle commun » et « Décalage en hauteur » de chaque pan).</p>
     </div>
   );
 }

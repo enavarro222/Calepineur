@@ -424,6 +424,20 @@ describe('édition d\'un pan', () => {
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeDisabled();
   });
 
+  it('garde la grille raccordée quand le pan part plus bas que le précédent', async () => {
+    const { user, tab } = setup();
+    await tab('Mur cuisson');
+    await user.click(screen.getByRole('button', { name: 'Raccorder à « Mur fenêtre »' }));
+    const prev = getProject().walls[0]!;
+    expect(getProject().walls[1]!.oy).toBe(prev.oy);
+    const dy = screen.getByLabelText('Décalage en hauteur avec « Mur fenêtre » (cm)');
+    await user.clear(dy);
+    await user.type(dy, '-90');
+    expect(getProject().walls[1]!.joinDy).toBe(-90);
+    expect(getProject().walls[1]!.oy).toBeCloseTo(prev.oy + 90, 6);
+    expect(screen.getByLabelText('Angle commun avec « Mur fenêtre »')).toBeChecked();
+  });
+
   it('ajoute puis supprime un élément', async () => {
     const { user } = setup();
     await user.click(screen.getByRole('button', { name: '+ Ajouter un élément' }));

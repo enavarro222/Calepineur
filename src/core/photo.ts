@@ -33,20 +33,23 @@ export const photoMatrix = (wall: Wall, s: number): string | null => calibMatrix
 
 // Deux pans reliés par un angle partagent une arête : sur une même photo, elle doit tomber au même endroit pour les deux.
 // Les deux repères du pan les plus proches de l'angle passent sur cette arête, en bas et en haut, projetés par le calage
-// du voisin ; les deux autres restent où ils sont. `side` : côté du pan où se trouve le voisin.
-export function joinCalib(pts: CalibPoint[], wall: Pick<Wall, 'W' | 'H'>, side: 'left' | 'right', near: CalibPoint[], neighbour: Pick<Wall, 'W' | 'H'>): CalibPoint[] | null {
+// du voisin ; les deux autres restent où ils sont. `side` : côté du pan où se trouve le voisin. Un point à y sur ce pan
+// est à y + `dy` sur le voisin.
+export function joinCalib(pts: CalibPoint[], wall: Pick<Wall, 'W' | 'H'>, side: 'left' | 'right', near: CalibPoint[], neighbour: Pick<Wall, 'W' | 'H'>, dy = 0): CalibPoint[] | null {
   const Hn = calibH(near);
   if (!Hn || pts.length !== 4) return null;
   const ex = side === 'left' ? 0 : wall.W;
   const nx = side === 'left' ? neighbour.W : 0;
-  const top = Math.min(wall.H, neighbour.H);
+  const bottom = Math.max(0, -dy);
+  const top = Math.min(wall.H, neighbour.H - dy);
+  if (top - bottom < 1) return null;
   const [a, b] = pts.map((p, k) => ({ k, d: Math.abs(p.wx - ex), wy: p.wy })).sort((u, v) => u.d - v.d || u.k - v.k);
   const [low, high] = a!.wy <= b!.wy ? [a!.k, b!.k] : [b!.k, a!.k];
   const onEdge = (wy: number): CalibPoint => {
-    const [px, py] = applyH(Hn, [nx, wy]);
+    const [px, py] = applyH(Hn, [nx, wy + dy]);
     return { wx: ex, wy, px, py };
   };
-  const out = pts.map((p, k) => (k === low ? onEdge(0) : k === high ? onEdge(top) : { ...p }));
+  const out = pts.map((p, k) => (k === low ? onEdge(bottom) : k === high ? onEdge(top) : { ...p }));
   return calibH(out) ? out : null;
 }
 

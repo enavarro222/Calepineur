@@ -458,8 +458,22 @@ test('cale les carreaux de la vue d\'ensemble comme sur la photo du pan', async 
   await page.getByLabel('Caler un pan').selectOption({ index: 1 });
   await page.getByRole('button', { name: 'Reprendre le calage de sa photo' }).click();
   await page.getByLabel('Caler un pan').selectOption({ index: 0 });
-  const global = await relative('.overview-big [data-testid=photo-layer]');
-  global.forEach((v, k) => expect(Math.abs(v - detail[k]!)).toBeLessThan(0.01));
+  // la reprise lit la taille de la photo du pan avant de s'appliquer
+  await expect.poll(async () => Math.max(...(await relative('.overview-big [data-testid=photo-layer]')).map((v, k) => Math.abs(v - detail[k]!)))).toBeLessThan(0.01);
+});
+
+// Le second pan part du sol, le premier du plan de travail : le plan déplié les place à leur hauteur réelle.
+test('place dans le plan déplié deux pans en angle qui ne partent pas de la même hauteur', async ({ page }) => {
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Mur cuisson' }).click();
+  await page.getByLabel('Angle commun avec « Mur fenêtre »').check();
+  await page.getByLabel('Décalage en hauteur avec « Mur fenêtre » (cm)').fill('-20');
+  await page.getByRole('button', { name: 'Vue d\'ensemble' }).click();
+  await page.getByText('Plan déplié', { exact: true }).click();
+  const [a, b] = await page.evaluate(() => [...document.querySelectorAll('.overview-wall svg')].map(svg => svg.getBoundingClientRect().toJSON() as DOMRect));
+  const perCm = a!.width / 240;
+  expect(b!.bottom - a!.bottom).toBeCloseTo(20 * perCm, 0);
+  expect(Math.abs(b!.left - a!.right)).toBeLessThan(0.5);
 });
 
 // Deux pans en angle sur la photo d'ensemble : l'arête commune tombe au même endroit pour les deux.
