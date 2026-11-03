@@ -8,7 +8,7 @@ import { applyAssignment, applyStyle, harmonyProposals, type Assignment } from '
 import { colLetters, round1 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import { optimizeGrid } from '../core/optimize';
-import { calibPoints, defaultCalib } from '../core/photo';
+import { calibPoints, defaultCalib, joinCalib } from '../core/photo';
 import { imageUrl, parseProjectFile, serializeProject } from '../core/project';
 import type { HarmonyStyle, Project, Wall } from '../core/types';
 import { averageColor, cropImage, dominantColors, imageSize, readImageFile } from '../lib/images';
@@ -212,6 +212,20 @@ export async function copyWallCalib(wallId: string, nw: number, nh: number): Pro
   } catch (e) {
     fileError(e);
   }
+}
+
+export function joinOverviewCalib(wallId: string, neighbourId: string, side: 'left' | 'right'): void {
+  const p = getProject();
+  const w = p.walls.find(x => x.id === wallId);
+  const n = p.walls.find(x => x.id === neighbourId);
+  const pts = p.overview?.walls[wallId];
+  const near = p.overview?.walls[neighbourId];
+  const next = w && n && pts && near ? joinCalib(pts, w, side, near, n) : null;
+  if (!next) {
+    showToast('Raccord impossible : cale d\'abord le pan voisin.');
+    return;
+  }
+  commit(d => { if (d.overview) d.overview.walls[wallId] = next; });
 }
 
 export function removeOverview(): void {

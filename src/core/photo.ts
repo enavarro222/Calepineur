@@ -1,5 +1,5 @@
 // Projection du plan sur la photo calée sur 4 repères.
-import { homography, mulH, type Homography } from './geom';
+import { applyH, homography, mulH, type Homography } from './geom';
 import type { CalibHint, CalibPoint, Point, Wall } from './types';
 
 export const PHOTO_K = 6; // px par cm du calque projeté sur la photo
@@ -30,6 +30,25 @@ export function calibMatrix(pts: CalibPoint[] | undefined, H: number, s: number)
 }
 
 export const photoMatrix = (wall: Wall, s: number): string | null => calibMatrix(wall.photo?.pts, wall.H, s);
+
+// Deux pans reliés par un angle partagent une arête : sur une même photo, elle doit tomber au même endroit pour les deux.
+// Les deux repères du pan les plus proches de l'angle passent sur cette arête, en bas et en haut, projetés par le calage
+// du voisin ; les deux autres restent où ils sont. `side` : côté du pan où se trouve le voisin.
+export function joinCalib(pts: CalibPoint[], wall: Pick<Wall, 'W' | 'H'>, side: 'left' | 'right', near: CalibPoint[], neighbour: Pick<Wall, 'W' | 'H'>): CalibPoint[] | null {
+  const Hn = calibH(near);
+  if (!Hn || pts.length !== 4) return null;
+  const ex = side === 'left' ? 0 : wall.W;
+  const nx = side === 'left' ? neighbour.W : 0;
+  const top = Math.min(wall.H, neighbour.H);
+  const [a, b] = pts.map((p, k) => ({ k, d: Math.abs(p.wx - ex), wy: p.wy })).sort((u, v) => u.d - v.d || u.k - v.k);
+  const [low, high] = a!.wy <= b!.wy ? [a!.k, b!.k] : [b!.k, a!.k];
+  const onEdge = (wy: number): CalibPoint => {
+    const [px, py] = applyH(Hn, [nx, wy]);
+    return { wx: ex, wy, px, py };
+  };
+  const out = pts.map((p, k) => (k === low ? onEdge(0) : k === high ? onEdge(top) : { ...p }));
+  return calibH(out) ? out : null;
+}
 
 // Repères de départ d'un pan sur une photo w × h : ses coins, dans un rectangle de la photo.
 export function defaultCalib(wall: Pick<Wall, 'W' | 'H'>, w: number, h: number, u0 = 0.15, u1 = 0.85): CalibPoint[] {

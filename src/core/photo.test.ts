@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyH } from './geom';
-import { calibPoints, isCalibUsable, PHOTO_K, photoH, photoMatrix } from './photo';
+import { calibPoints, isCalibUsable, joinCalib, PHOTO_K, photoH, photoMatrix } from './photo';
 import { wall } from '../test/fixtures';
-import type { WallPhoto } from './types';
+import type { CalibPoint, Point, WallPhoto } from './types';
 
 const photo: WallPhoto = {
   src: 'img:a', opacity: 1, blend: true,
@@ -42,6 +42,48 @@ describe('photo', () => {
     const d = m[15]! + m[7]! * svgY;
     expect(px / d).toBeCloseTo(100 * s, 6);
     expect(py / d).toBeCloseTo(500 * s, 6);
+  });
+});
+
+describe('raccord de deux pans sur une même photo', () => {
+  const left = { W: 100, H: 60 };
+  const right = { W: 200, H: 80 };
+  const far: CalibPoint[] = [
+    { wx: 0, wy: 0, px: 300, py: 700 }, { wx: 200, wy: 0, px: 990, py: 760 },
+    { wx: 200, wy: 50, px: 980, py: 400 }, { wx: 0, wy: 50, px: 310, py: 420 },
+  ];
+  const project = (pts: CalibPoint[], w: { W: number; H: number }, x: number, y: number): Point => applyH(photoH(wall({ ...w, photo: { ...photo, pts } }))!, [x, y]);
+
+  // Bas et haut de l'arête tombent juste ; entre les deux, elle suit la même droite.
+  const cross = (p: Point, q: Point, r: Point): number => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+
+  it('pose l\'arête du pan suivant sur le bord droit du pan précédent', () => {
+    const pts = joinCalib(far, right, 'left', photo.pts, left)!;
+    for (const y of [0, 60]) {
+      const a = project(photo.pts, left, 100, y);
+      const b = project(pts, right, 0, y);
+      expect(b[0]).toBeCloseTo(a[0], 6);
+      expect(b[1]).toBeCloseTo(a[1], 6);
+    }
+    const line = [project(photo.pts, left, 100, 0), project(photo.pts, left, 100, 60)] as const;
+    expect(cross(...line, project(pts, right, 0, 25)) / 1e4).toBeCloseTo(0, 6);
+    // Les repères loin de l'angle ne bougent pas.
+    expect(pts[1]).toEqual(far[1]);
+    expect(pts[2]).toEqual(far[2]);
+  });
+
+  it('et inversement, le bord droit du pan précédent sur l\'arête du suivant', () => {
+    const pts = joinCalib(photo.pts, left, 'right', far, right)!;
+    const a = project(far, right, 0, 60);
+    const b = project(pts, left, 100, 60);
+    expect(b[0]).toBeCloseTo(a[0], 6);
+    expect(b[1]).toBeCloseTo(a[1], 6);
+    expect(pts[0]).toEqual(photo.pts[0]);
+    expect(pts[3]).toEqual(photo.pts[3]);
+  });
+
+  it('sans calage du voisin, rien à raccorder', () => {
+    expect(joinCalib(far, right, 'left', [], left)).toBeNull();
   });
 });
 

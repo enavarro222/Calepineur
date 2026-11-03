@@ -461,3 +461,25 @@ test('cale les carreaux de la vue d\'ensemble comme sur la photo du pan', async 
   const global = await relative('.overview-big [data-testid=photo-layer]');
   global.forEach((v, k) => expect(Math.abs(v - detail[k]!)).toBeLessThan(0.01));
 });
+
+// Deux pans en angle sur la photo d'ensemble : l'arête commune tombe au même endroit pour les deux.
+test('raccorde sur la photo d\'ensemble deux pans qui partagent un angle', async ({ page }) => {
+  const errors = failOnConsoleErrors(page);
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Mur cuisson' }).click();
+  await page.getByLabel('Angle commun avec « Mur fenêtre »').check();
+  await page.getByRole('button', { name: 'Vue d\'ensemble' }).click();
+  await page.getByText('Photo d\'ensemble', { exact: true }).click();
+  await page.getByText('Choisir la photo d\'ensemble…').locator('input').setInputFiles(await pngFile(page, 'piece.png', 1200, 700, '#d9d2c4'));
+  await page.getByLabel('Caler un pan').selectOption({ label: 'Mur cuisson' });
+  await page.getByRole('button', { name: 'Raccorder à « Mur fenêtre »' }).click();
+
+  // Le bord droit de l'un et le bord gauche de l'autre coïncident, à la même hauteur.
+  const [a, b] = await page.evaluate(() => [...document.querySelectorAll('.overview-big [data-testid=photo-layer] svg')].map(svg => {
+    const r = svg.getBoundingClientRect();
+    return [r.left, r.right, r.top, r.bottom];
+  }));
+  expect(Math.abs(b![0]! - a![1]!)).toBeLessThan(1.5);
+  expect(Math.abs(b![3]! - a![3]!)).toBeLessThan(1.5);
+  await expectNoErrors(errors);
+});

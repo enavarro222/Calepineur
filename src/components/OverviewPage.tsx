@@ -1,10 +1,10 @@
 // Vue d'ensemble : tous les pans d'un coup d'œil, en plan déplié, sur leurs photos, ou sur une photo de toute la pièce.
 import { useRef, useState, type PointerEvent } from 'react';
 import { cm } from '../core/format';
-import { unfold } from '../core/layout';
+import { joinsPrevious, unfold } from '../core/layout';
 import { defaultCalib } from '../core/photo';
 import { imageUrl } from '../core/project';
-import { copyWallCalib, moveOverviewPoint, removeOverview, uploadOverview } from '../store/actions';
+import { copyWallCalib, joinOverviewCalib, moveOverviewPoint, removeOverview, uploadOverview } from '../store/actions';
 import { commit, getProject, setUi, useStore } from '../store/store';
 import { FileButton, NumField, SegRadio } from './fields';
 import { PhotoComposite, type PhotoScale } from './PhotoComposite';
@@ -118,7 +118,15 @@ function GlobalView() {
       </div>
     );
   }
-  const calibWall = project.walls.find(w => w.id === calibId);
+  const calibIndex = project.walls.findIndex(w => w.id === calibId);
+  const calibWall = project.walls[calibIndex];
+  // Voisins par un angle déjà posés sur la photo : l'arête commune peut se reprendre de leur calage.
+  const joins = calibWall && ov.walls[calibWall.id]
+    ? ([[calibIndex - 1, 'left', calibIndex], [calibIndex + 1, 'right', calibIndex + 1]] as const).flatMap(([j, side, link]) => {
+      const n = project.walls[j];
+      return n && ov.walls[n.id] && joinsPrevious(project.walls, link) ? [{ n, side }] : [];
+    })
+    : [];
   const edit = (path: string, fn: (o: NonNullable<typeof ov>) => void) => commit(p => { if (p.overview) fn(p.overview); }, { coalesce: `overview.${path}` });
   const layers = project.walls.flatMap((w, i) => (ov.walls[w.id] ? [{ wall: w, comp: comps[i]!, pts: ov.walls[w.id], uid: `g${i}`, outlines: w.id === calibId }] : []));
   return (
@@ -139,11 +147,15 @@ function GlobalView() {
       </div>
       {calibWall && (
         <div className="overview-calib">
-          <p className="hint">Place les 4 pastilles jaunes de « {calibWall.name} » sur les points du mur dont tu connais la position (coins, angle au ras du plan de travail, bas de hotte…), et saisis-la ici en cm.</p>
+          <p className="hint">Place les 4 pastilles jaunes de « {calibWall.name} » sur les points du mur dont tu connais la position (coins, angle au ras du plan de travail, bas de hotte…), et saisis-la ici en cm.{joins.length > 0 && ' Pour l\'angle commun, place d\'abord le pan voisin, puis raccorde-le : seuls les deux repères du côté opposé restent à placer.'}</p>
           {calibWall.photo && (
             <button disabled={!photoSize} title="Si la photo d'ensemble est celle de ce pan, son calage s'applique tel quel"
               onClick={() => photoSize && void copyWallCalib(calibWall.id, photoSize.nw, photoSize.nh)}>Reprendre le calage de sa photo</button>
           )}
+          {joins.map(({ n, side }) => (
+            <button key={n.id} title="Les deux repères les plus proches de l'angle passent sur l'arête commune, telle que le pan voisin la place"
+              onClick={() => joinOverviewCalib(calibWall.id, n.id, side)}>Raccorder à « {n.name} »</button>
+          ))}
           {ov.walls[calibWall.id] ? (
             <table className="calib">
               <thead><tr><th>#</th><th>x (cm)</th><th>y (cm)</th></tr></thead>
