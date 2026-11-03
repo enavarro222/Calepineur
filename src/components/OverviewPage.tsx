@@ -114,9 +114,15 @@ function GlobalView() {
   const ov = project.overview;
   const src = imageUrl(ov?.src, images);
   if (!ov || !src) {
+    const prepared = project.walls.filter(w => w.overviewCalib).length;
     return (
       <div className="overview-missing big">
         <p>Ajoute une photo qui montre tous les pans à la fois : chaque pan y sera calé sur 4 repères, comme sur sa propre photo.</p>
+        <p>
+          {prepared
+            ? `Calage prêt pour ${prepared} pan${prepared > 1 ? 's' : ''} : choisis la photo d'ensemble donnée à ton IA, sans la recadrer.`
+            : 'Ton IA peut préparer ce calage (Préparer avec une IA) : donne-lui la photo, puis colle sa réponse ou ouvre son lien.'}
+        </p>
         <FileButton accept="image/*" onFile={f => void uploadOverview(f)}>Choisir la photo d'ensemble…</FileButton>
       </div>
     );

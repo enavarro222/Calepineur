@@ -476,6 +476,45 @@ test('place dans le plan déplié deux pans en angle qui ne partent pas de la m�
   expect(Math.abs(b!.left - a!.right)).toBeLessThan(0.5);
 });
 
+// Calage de la photo d'ensemble préparé par une IA : reçu avant la photo, ou après.
+test('cale la photo d\'ensemble avec les repères reçus par lien', async ({ page }) => {
+  const errors = failOnConsoleErrors(page);
+  const rect = (u0: number, u1: number, W: number, H: number) => [
+    { wx: 0, wy: 0, u: u0, v: 0.8 }, { wx: W, wy: 0, u: u1, v: 0.8 }, { wx: W, wy: H, u: u1, v: 0.5 }, { wx: 0, wy: H, u: u0, v: 0.5 },
+  ];
+  const apply = async (walls: object[]) => {
+    await page.goto(`./#config=${encodeURIComponent(JSON.stringify({ walls }))}`);
+    await page.getByRole('dialog', { name: 'Appliquer ce lien de configuration ?' }).getByRole('button', { name: 'Appliquer' }).click();
+  };
+  // place du calque de chaque pan, en proportions de la photo
+  const boxes = () => page.evaluate(() => {
+    const img = document.querySelector('.overview-big .ph-img')!.getBoundingClientRect();
+    return [...document.querySelectorAll('.overview-big [data-testid=photo-layer] svg')].map(svg => {
+      const r = svg.getBoundingClientRect();
+      return [(r.left - img.left) / img.width, (r.right - img.left) / img.width, (r.top - img.top) / img.height, (r.bottom - img.top) / img.height];
+    });
+  });
+  const near = (got: number[] | undefined, want: number[]) => want.forEach((v, k) => expect(Math.abs(got![k]! - v)).toBeLessThan(0.005));
+
+  await page.goto('./');
+  await apply([{ id: 'demo-1', overviewCalib: rect(0.1, 0.4, 240, 75) }]);
+  await page.getByRole('button', { name: 'Vue d\'ensemble' }).click();
+  await page.getByText('Photo d\'ensemble', { exact: true }).click();
+  await expect(page.getByText(/Calage prêt pour 1 pan/)).toBeVisible();
+  await page.getByText('Choisir la photo d\'ensemble…').locator('input').setInputFiles(await pngFile(page, 'piece.png', 1200, 700, '#d9d2c4'));
+  await expect(page.getByTestId('photo-layer')).toHaveCount(2);
+  near((await boxes())[0], [0.1, 0.4, 0.5, 0.8]);
+
+  // la photo est déjà là : le calage reçu s'applique tout de suite
+  await apply([{ id: 'demo-2', overviewCalib: rect(0.5, 0.9, 300, 95) }]);
+  await page.getByRole('button', { name: 'Vue d\'ensemble' }).click();
+  await page.getByText('Photo d\'ensemble', { exact: true }).click();
+  await expect.poll(async () => (await boxes())[1]?.[0]).toBeCloseTo(0.5, 2);
+  near((await boxes())[1], [0.5, 0.9, 0.5, 0.8]);
+  near((await boxes())[0], [0.1, 0.4, 0.5, 0.8]);
+  await expectNoErrors(errors);
+});
+
 // Deux pans en angle sur la photo d'ensemble : l'arête commune tombe au même endroit pour les deux.
 test('raccorde sur la photo d\'ensemble deux pans qui partagent un angle', async ({ page }) => {
   const errors = failOnConsoleErrors(page);

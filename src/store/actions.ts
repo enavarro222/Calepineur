@@ -189,18 +189,24 @@ export function removePhoto(i: number): void {
   removeUnusedImages(getProject());
 }
 
-// Photo d'ensemble : chaque pan démarre calé sur une portion de la photo, de gauche à droite, à ajuster ensuite.
+// Photo d'ensemble : chaque pan prend le calage préparé par l'IA, ou démarre sur une portion de la photo, de gauche à
+// droite, à ajuster ensuite.
 export async function uploadOverview(file: File): Promise<void> {
   try {
     const r = await readImageFile(file, 2400);
     const src = storeImage(r.url);
+    const prepared = getProject().walls.some(w => w.overviewCalib);
     commit(p => {
       const n = p.walls.length;
-      const walls = Object.fromEntries(p.walls.map((w, k) => [w.id, defaultCalib(w, r.w, r.h, (k + 0.1) / n, (k + 0.9) / n)]));
+      const walls = Object.fromEntries(p.walls.map((w, k) => [w.id,
+        w.overviewCalib ? calibPoints(w.overviewCalib, r.w, r.h) : defaultCalib(w, r.w, r.h, (k + 0.1) / n, (k + 0.9) / n)]));
+      for (const w of p.walls) delete w.overviewCalib;
       p.overview = { src, opacity: p.overview?.opacity ?? 1, blend: p.overview?.blend ?? true, walls };
     });
     removeUnusedImages(getProject());
-    showToast('Cale maintenant chaque pan : place ses 4 pastilles sur les points indiqués de la photo.', 6000);
+    showToast(prepared
+      ? 'Pans calés avec les repères de ton IA. Vérifie que chaque contour tombe sur son mur.'
+      : 'Cale maintenant chaque pan : place ses 4 pastilles sur les points indiqués de la photo.', 6000);
   } catch (e) {
     fileError(e);
   }
@@ -334,6 +340,16 @@ export async function importFile(file: File): Promise<void> {
 // Un calage reçu pour une photo déjà chargée s'applique dès que sa taille est connue.
 async function applyCalibToPhotos(): Promise<void> {
   const { project, images } = useStore.getState();
+  const overviewUrl = imageUrl(project.overview?.src, images);
+  if (overviewUrl && project.walls.some(w => w.overviewCalib)) {
+    const { w: width, h } = await imageSize(overviewUrl);
+    mutate(p => {
+      for (const w of p.walls) {
+        if (w.overviewCalib && p.overview) p.overview.walls[w.id] = calibPoints(w.overviewCalib, width, h);
+        delete w.overviewCalib;
+      }
+    });
+  }
   for (const w of project.walls) {
     const url = imageUrl(w.photo?.src, images);
     if (!w.calib || !url) continue;
@@ -354,6 +370,7 @@ export async function applyConfig(next: Project): Promise<void> {
   const { walls, designs } = getProject();
   const waiting = [
     ...(walls.some(w => w.calib && !w.photo) ? ['Choisis la photo de chaque mur : le calage est prêt.'] : []),
+    ...(walls.some(w => w.overviewCalib) && !getProject().overview ? ['Dans Vue d\'ensemble, choisis la photo d\'ensemble : le calage est prêt.'] : []),
     ...(designs.some(d => d.crop) ? ['Dans Carreaux & motifs, choisis la photo des carreaux : la découpe est prête.'] : []),
   ];
   showToast(`Modifications appliquées. ${waiting.join(' ') || 'Vérifie les cotes au mètre.'}`, 8000);

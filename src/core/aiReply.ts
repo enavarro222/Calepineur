@@ -10,7 +10,7 @@ import type { Design, Project, Wall } from './types';
 const MAX_TILES_PER_WALL = 20000;
 const OTHER_TILE_FIELDS = ['grout', 'edgeGap', 'waste', 'minPiece', 'perBox', 'm2PerBox'] as const;
 const TILE_FIELDS = ['F', 'joint', 'orient', ...OTHER_TILE_FIELDS] as const;
-const WALL_FIELDS = ['name', 'W', 'H', 'color', 'ox', 'oy', 'zoneMode', 'zone', 'obstacles', 'calib'] as const;
+const WALL_FIELDS = ['name', 'W', 'H', 'color', 'ox', 'oy', 'zoneMode', 'zone', 'obstacles', 'calib', 'overviewCalib', 'joinPrev', 'joinDy'] as const;
 const DESIGN_FIELDS = ['name', 'color', 'colors', 'weight', 'crop'] as const;
 
 type Raw = Record<string, unknown>;
@@ -41,6 +41,7 @@ function checkPlausible(p: Project): void {
     if (w.W <= 0 || w.H <= 0) throw new Error(`« ${w.name} » n'a pas de dimensions valides.`);
     if (w.W * w.H / p.tile.F ** 2 > MAX_TILES_PER_WALL) throw new Error(`« ${w.name} » demanderait trop de carreaux. Vérifie que tout est en cm.`);
     if (w.calib && !isCalibUsable(w.calib)) throw new Error(`« ${w.name} » : les 4 repères de calage ne doivent pas être alignés.`);
+    if (w.overviewCalib && !isCalibUsable(w.overviewCalib)) throw new Error(`« ${w.name} » : les 4 repères sur la photo d'ensemble ne doivent pas être alignés.`);
   }
 }
 
@@ -144,6 +145,9 @@ function wallChanges(a: Wall, b: Wall): string | null {
   if (a.ox !== b.ox || a.oy !== b.oy) parts.push('grille déplacée');
   if (a.color !== b.color) parts.push('couleur du mur modifiée');
   if (b.calib && !same(a.calib, b.calib)) parts.push('calage photo proposé');
+  if (b.overviewCalib && !same(a.overviewCalib, b.overviewCalib)) parts.push('calage sur la photo d\'ensemble proposé');
+  if (!!a.joinPrev !== !!b.joinPrev) parts.push(b.joinPrev ? 'angle commun avec le pan précédent' : 'plus d\'angle commun avec le pan précédent');
+  if ((a.joinDy ?? 0) !== (b.joinDy ?? 0)) parts.push(`décalage en hauteur ${cm(b.joinDy ?? 0)} cm (avant : ${cm(a.joinDy ?? 0)})`);
   return parts.length ? `${b.name} : ${parts.join(', ')}` : null;
 }
 
@@ -177,7 +181,7 @@ export function describeChanges(a: Project, b: Project): string[] {
   for (const w of b.walls) {
     const old = a.walls.find(c => c.id === w.id);
     const n = w.obstacles.length;
-    if (!old) lines.push(`Nouveau pan : ${w.name}, ${cm(w.W)} × ${cm(w.H)} cm, ${n} élément${n > 1 ? 's' : ''}${w.calib ? ', calage photo proposé' : ''}`);
+    if (!old) lines.push(`Nouveau pan : ${w.name}, ${cm(w.W)} × ${cm(w.H)} cm, ${n} élément${n > 1 ? 's' : ''}${w.calib ? ', calage photo proposé' : ''}${w.overviewCalib ? ', calage sur la photo d\'ensemble proposé' : ''}`);
     else {
       const line = wallChanges(old, w);
       if (line) lines.push(line);

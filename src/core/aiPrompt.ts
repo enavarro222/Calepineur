@@ -44,6 +44,11 @@ const CALIB = `Calage photo : tu ne peux pas transmettre mes photos, mais tu peu
 - u, v : position sur la photo d'origine, non recadrée, de 0 à 1 ; u depuis la gauche, v depuis le haut.
 Dis-moi quelle photo choisir pour chaque mur : je la charge dans Calepineur et le calage s'applique tout seul. Je l'ajusterai à la main si besoin.`;
 
+const OVERVIEW = `Photo d'ensemble : si une photo montre plusieurs murs à la fois, ajoute à chaque mur visible un champ "overviewCalib", au même format que "calib", avec les u, v sur cette photo-là. Pour deux murs en angle, mets deux repères de chacun sur l'arête commune, aux mêmes u, v et à la même hauteur réelle. Dis-moi quelle photo est la photo d'ensemble : je la charge dans la Vue d'ensemble.
+{ "walls": [{ "id": "mur-2", "overviewCalib": [{ "wx": 0, "wy": 0, "u": 0.45, "v": 0.6 }, { "wx": 300, "wy": 0, "u": 0.85, "v": 0.66 }, { "wx": 300, "wy": 75, "u": 0.84, "v": 0.4 }, { "wx": 0, "wy": 75, "u": 0.45, "v": 0.38 }] }] }
+
+Angles : range les murs de gauche à droite. Si un mur touche le précédent dans un angle (son bord gauche contre le bord droit du précédent), ajoute-lui "joinPrev": true. Si son bas n'est pas au même niveau que celui du précédent (l'un part du sol, l'autre du plan de travail), "joinDy" donne la hauteur de son bas au-dessus du bas du précédent, en cm, négative s'il part plus bas. Pour que la grille continue à travers l'angle : "ox" = ox du précédent − W du précédent, et "oy" = oy du précédent − joinDy.`;
+
 const CROP = `Découpe des motifs : si une photo montre tous les carreaux, indique où se trouve chacun. Ajoute à chaque motif un champ "crop" : le rectangle qui entoure le carreau, bien de face.
 { "designs": [{ "key": "A", "crop": { "u": 0.05, "v": 0.1, "w": 0.2, "h": 0.25 } }] }
 - u, v : coin haut-gauche du rectangle sur la photo d'origine, non recadrée. w, h : sa largeur et sa hauteur. Tout est en proportions de l'image, de 0 à 1.
@@ -52,7 +57,7 @@ Je charge cette photo dans Calepineur et chaque motif est découpé automatiquem
 const COLORS = `Couleurs des motifs : ajoute à chaque motif un champ "colors", ses couleurs principales au format #rrggbb, la dominante d'abord (3 au plus, une seule pour un uni). Elles servent aux styles « Vagues de couleur » et « Dégradé », où les carreaux voisins partagent une couleur.
 { "designs": [{ "key": "A", "colors": ["#2a3140", "#7d9488"] }] }`;
 
-const IMAGES_POINTER = `Photos : si tu as accès au web, lis ${GUIDE_URL} pour préparer le calage de mes photos et la découpe de mes motifs.`;
+const IMAGES_POINTER = `Photos : si tu as accès au web, lis ${GUIDE_URL} pour préparer le calage de mes photos (photo d'ensemble et angles compris) et la découpe de mes motifs.`;
 
 const LINK = `Lien : tu peux aussi donner la configuration, complète ou partielle, sous forme d'un lien à cliquer :
 ${APP_URL}#config=<JSON encodé>
@@ -96,6 +101,8 @@ ${PARTIAL}
 
 ${compact ? IMAGES_POINTER : `${CALIB}
 
+${OVERVIEW}
+
 ${CROP}
 
 ${COLORS}`}
@@ -116,7 +123,7 @@ ${buildPrompt(null)}
 
 ## Limites
 
-- Tu ne peux pas transmettre d'image : l'utilisateur charge ses photos et ses motifs dans l'application. Le champ "calib" prépare seulement le calage.
+- Tu ne peux pas transmettre d'image : l'utilisateur charge ses photos et ses motifs dans l'application. Les champs "calib" et "overviewCalib" préparent seulement le calage.
 - Les cotes déduites d'une photo sont des estimations. Dis-le toujours.
 `;
 }

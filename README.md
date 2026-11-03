@@ -43,7 +43,10 @@ Elle peut répondre par un projet complet, une simple correction, ou un lien de 
 Un lien ne peut pas contenir d'image, mais une IA peut préparer leur traitement :
 
 - `calib` sur un mur : 4 repères de calage, appliqués dès que la photo du mur est choisie, ou tout de suite si elle est déjà chargée.
+- `overviewCalib` sur un mur : ses 4 repères sur la photo d'ensemble, appliqués de la même façon dès que cette photo est choisie dans la Vue d'ensemble.
 - `crop` sur un motif : l'emplacement du carreau sur une photo qui les montre tous. Calepineur découpe les motifs quand cette photo est choisie.
+
+Elle peut aussi régler les angles : `joinPrev` sur un mur indique qu'il touche le précédent, et `joinDy` la hauteur de son bas au-dessus du bas du précédent.
 
 Les liens préremplis reposent sur des paramètres d'adresse non documentés. Chaque bouton copie donc aussi la consigne, à coller si elle n'apparaît pas.
 

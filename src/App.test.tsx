@@ -247,6 +247,17 @@ describe('calage reçu sans photo', () => {
     await user.click(screen.getByRole('button', { name: 'Photo' }));
     expect(screen.getAllByText(/Calage prêt/)).toHaveLength(2);
   });
+
+  it('attend la photo d\'ensemble pour le calage qui la concerne', async () => {
+    const { user, tab } = setup();
+    act(() => applyHash(`#config=${encodeURIComponent(JSON.stringify({ walls: [{ name: 'Mur cuisson', overviewCalib: calib, joinPrev: true, joinDy: -20 }] }))}`));
+    expect(screen.getByText(/calage sur la photo d'ensemble proposé, angle commun avec le pan précédent, décalage en hauteur -20 cm/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Appliquer' }));
+    expect(screen.getByRole('status')).toHaveTextContent('choisis la photo d\'ensemble : le calage est prêt');
+    await tab('Vue d\'ensemble');
+    await user.click(screen.getByText('Photo d\'ensemble'));
+    expect(screen.getByText(/Calage prêt pour 1 pan/)).toBeInTheDocument();
+  });
 });
 
 describe('découpe reçue sans photo', () => {

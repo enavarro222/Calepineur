@@ -198,6 +198,18 @@ describe('calage par lien', () => {
   ])('refuse %s', (_, bad, message) => {
     expect(() => patch({ walls: [{ id: 'w1', calib: bad }] })).toThrow(message);
   });
+
+  it('prépare le calage sur la photo d\'ensemble, et l\'angle avec le pan précédent', () => {
+    const base = project({ walls: [wall(), wall({ id: 'w2', name: 'Autre' })] });
+    const next = resolveConfig(base, JSON.stringify({ walls: [{ id: 'w2', overviewCalib: calib, joinPrev: true, joinDy: -90 }] }));
+    expect(next.walls[1]).toMatchObject({ overviewCalib: calib, joinPrev: true, joinDy: -90 });
+    expect(parseProject(JSON.parse(JSON.stringify(next)))).toEqual(next);
+    expect(describeChanges(base, next)).toEqual([
+      'Autre : calage sur la photo d\'ensemble proposé, angle commun avec le pan précédent, décalage en hauteur -90 cm (avant : 0)',
+    ]);
+    expect(() => patch({ walls: [{ id: 'w1', overviewCalib: calib.slice(0, 3) }] })).toThrow(/4 repères/);
+    expect(() => patch({ walls: [{ id: 'w1', overviewCalib: calib.map((c, i) => ({ ...c, wx: i, wy: 0, u: i / 10, v: 0 })) }] })).toThrow(/photo d'ensemble/);
+  });
 });
 
 describe('découpe des motifs', () => {
