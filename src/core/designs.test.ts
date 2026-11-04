@@ -72,17 +72,26 @@ describe('pickDesign', () => {
   const rng = () => 0;
 
   it('choisit le moins utilisé', () => {
-    expect(pickDesign(project(), { A: 5, B: 1, C: 5 }, new Set(), rng)).toBe('B');
+    expect(pickDesign(project(), { A: 5, B: 1, C: 5 }, {}, rng)).toBe('B');
   });
 
   it('accepte un voisin identique plutôt que rien', () => {
-    expect(pickDesign(project(), {}, new Set(['A', 'B', 'C']), rng)).toBeTruthy();
+    expect(pickDesign(project(), {}, { A: 1000, B: 1000, C: 1000 }, rng)).toBeTruthy();
+  });
+
+  it('écarte un voisin identique même au prix de l\'équilibre', () => {
+    expect(pickDesign(project(), { A: 9, B: 0, C: 0 }, { B: 1000, C: 1000 }, rng)).toBe('A');
+  });
+
+  it('préfère, à équilibre égal, le motif le moins répété autour', () => {
+    expect(pickDesign(project(), {}, { B: 30, C: 8 }, rng)).toBe('A');
+    expect(pickDesign(project(), {}, { A: 30, B: 8 }, rng)).toBe('C');
   });
 
   it('retombe sur le premier motif si tous les poids sont nuls', () => {
     const p = project();
     p.designs.forEach(d => { d.weight = 0; });
-    expect(pickDesign(p, {}, new Set(), rng)).toBe('A');
+    expect(pickDesign(p, {}, {}, rng)).toBe('A');
   });
 });
 
@@ -95,6 +104,31 @@ describe('pickRot', () => {
 });
 
 describe('shuffleDesigns', () => {
+  // Deux motifs identiques sur une même rangée avec une seule colonne entre eux sautent aux yeux.
+  it('évite les motifs identiques à une colonne d\'écart, sans changer les quantités', () => {
+    const designs = 'ABCDEFG'.split('').map(key => ({ key, name: key, img: '', color: '#000000', weight: 1 }));
+    const zone: [number, number][] = [[-10, -10], [-10, 100], [210, 100], [210, -10]];
+    const { p, comps } = assigned({ designs, walls: [wall({ W: 200, H: 90, zone })] });
+    const c = comps[0]!;
+    const w = p.walls[0]!;
+    for (const seed of [1, 2, 3]) {
+      p.seed = seed;
+      shuffleDesigns(p, comps, false);
+      const same = [0, 0, 0, 0];
+      for (const t of c.tiles) {
+        for (const [q, r, lvl] of c.g.near(t.q, t.r)) {
+          const k = `${q},${r}`;
+          if (c.byKey.has(k) && w.tiles[k]!.d === w.tiles[t.key]!.d) same[lvl] = (same[lvl] ?? 0) + 1;
+        }
+      }
+      // chaque paire est vue des deux côtés ; un mélange sans cette règle en laisse une centaine
+      expect(same[1]).toBe(0);
+      expect(same[2]! / 2).toBeLessThanOrEqual(12);
+      const counts = Object.values(countByDesign(p));
+      expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(4);
+    }
+  });
+
   it('garde les carreaux verrouillés', () => {
     const { p, comps } = assigned();
     const key = comps[0]!.tiles[5]!.key;

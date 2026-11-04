@@ -100,6 +100,10 @@ interface Model {
 
 const ADJACENT_COST = 12;
 const NEAR_COST = 0.5;
+// Deux motifs identiques à une colonne d'écart (√3 pas : même rangée en flat) se lisent comme une paire alignée.
+// Plus fort, il pousserait vers un pavage régulier ; les styles de couleur gardent leur réglage.
+const ONE_COLUMN_COST = 1;
+const SQ3 = Math.sqrt(3);
 const TONE_COST = 0.35;
 const LINE_COST = 4;
 const PATTERN_COST = 3;
@@ -246,7 +250,9 @@ function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): M
         if (dist > RING2_RADIUS || dist < SPLIT_TILE) continue;
         const f = Math.min(ca.frac, cb.frac);
         const near = 1 / dist ** 2;
-        pairs.push({ a, b, same: f * (dist < 1.1 ? ADJACENT_COST : NEAR_COST * near), tone: TONE_COST * near, adjacent: dist < 1.1 });
+        const oneColumn = style === 'natural' && Math.abs(dist - SQ3) < 0.1;
+        const same = dist < 1.1 ? ADJACENT_COST : oneColumn ? ONE_COLUMN_COST : NEAR_COST * near;
+        pairs.push({ a, b, same: f * same, tone: TONE_COST * near, adjacent: dist < 1.1 });
         ring2[a]!.push(b);
         ring2[b]!.push(a);
         if (dist < 1.1) {

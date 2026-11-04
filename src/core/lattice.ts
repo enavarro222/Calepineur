@@ -80,6 +80,24 @@ function hexLattice(tile: TileSpec) {
     return out;
   }
 
+  // Emplacements à deux pas au plus, avec leur éloignement : 1 = côte à côte, 2 = une colonne entre (même rangée
+  // en flat, même colonne en pointy, à √3 pas), 3 = en ligne droite avec un carreau entre (2 pas).
+  function near(q: number, r: number): [number, number, 1 | 2 | 3][] {
+    const out: [number, number, 1 | 2 | 3][] = [];
+    const c0 = center(q, r, 0, 0);
+    for (let dq = -2; dq <= 2; dq++) {
+      for (let dr = -2; dr <= 2; dr++) {
+        if (!dq && !dr) continue;
+        const c = center(q + dq, r + dr, 0, 0);
+        const k = Math.hypot(c[0] - c0[0], c[1] - c0[1]) / d;
+        if (k < 1.01) out.push([q + dq, r + dr, 1]);
+        else if (k < 1.74) out.push([q + dq, r + dr, 2]);
+        else if (k < 2.01) out.push([q + dq, r + dr, 3]);
+      }
+    }
+    return out;
+  }
+
   function range(W: number, H: number, ox: number, oy: number): LatticeRange {
     const m = 2;
     return {
@@ -95,7 +113,7 @@ function hexLattice(tile: TileSpec) {
   const nearAxes = (flat ? [30, 90, 150] : [0, 60, 120]).map(axis);
   const farAxes = (flat ? [0, 60, 120] : [30, 90, 150]).map(axis);
 
-  return { F, j, R, d, flat, base, px, py, area: SQ3 / 2 * F * F, center, verts, nearest, neighbors, range, nearAxes, farAxes };
+  return { F, j, R, d, flat, base, px, py, area: SQ3 / 2 * F * F, center, verts, nearest, neighbors, near, range, nearAxes, farAxes };
 }
 
 export const latticeFor = (tile: TileSpec): Lattice => hexLattice(tile);

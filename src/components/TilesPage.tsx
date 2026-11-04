@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { computeWall } from '../core/compute';
-import { bannedFor, pickDesign, pickRot } from '../core/designs';
+import { penaltiesFor, pickDesign, pickRot } from '../core/designs';
 import { cm } from '../core/format';
 import { hashStr, mulberry32 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
@@ -54,7 +54,7 @@ function usePreview(project: Project) {
     const rng = mulberry32(hashStr(`prev:${project.seed}`));
     const counts: Record<string, number> = {};
     for (const t of comp.tiles) {
-      const d = pickDesign(project, counts, bannedFor(wall, comp, t), rng);
+      const d = pickDesign(project, counts, penaltiesFor(wall, comp, t), rng);
       wall.tiles[t.key] = { d, rot: pickRot(project, rng) };
       if (d) counts[d] = (counts[d] ?? 0) + 1;
     }
@@ -148,7 +148,7 @@ export function TilesPage() {
             <button onClick={() => shuffle(true)}>Mélanger (garder mes choix)</button>
             <button onClick={() => { if (window.confirm('Re-mélanger tous les carreaux, y compris ceux peints ou pivotés à la main ?')) shuffle(false); }}>Tout re-mélanger</button>
           </div>
-          <p className="hint">Le mélange équilibre les quantités selon les poids et évite deux motifs identiques côte à côte. La rotation s'applique au prochain mélange. Si tu as choisi un style dans Harmoniser, le mélange en tire une nouvelle variante.</p>
+          <p className="hint">Le mélange équilibre les quantités selon les poids et évite deux motifs identiques côte à côte, et autant que possible alignés à une colonne d'écart. La rotation s'applique au prochain mélange. Si tu as choisi un style dans Harmoniser, le mélange en tire une nouvelle variante.</p>
         </section>
 
         <section className="card preview"><h3>Aperçu</h3><div id="tile-preview"><Preview /></div></section>

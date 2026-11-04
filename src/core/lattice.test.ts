@@ -20,6 +20,17 @@ describe.each<Orient>(['flat', 'pointy'])('réseau hexagonal %s', orient => {
     }
   });
 
+  it('classe les emplacements à deux pas par éloignement', () => {
+    const c = g.center(3, -2, 0, 0);
+    const ns = g.near(3, -2);
+    const dist = { 1: 1, 2: Math.sqrt(3), 3: 2 };
+    for (const lvl of [1, 2, 3] as const) expect(ns.filter(n => n[2] === lvl)).toHaveLength(6);
+    for (const [nq, nr, lvl] of ns) {
+      const n = g.center(nq, nr, 0, 0);
+      expect(Math.hypot(n[0] - c[0], n[1] - c[1])).toBeCloseTo(g.d * dist[lvl], 6);
+    }
+  });
+
   it('retrouve le carreau le plus proche', () => {
     const c = g.center(3, 2, 5, -4);
     const n = g.nearest(c[0] + 1, c[1] - 1, 5, -4);
