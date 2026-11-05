@@ -59,6 +59,21 @@ describe('harmonyReport', () => {
     expect(r2.score).toBeLessThan(clean.score);
   });
 
+  it('repère deux motifs identiques à une colonne d\'écart', () => {
+    const { p, comps } = ready();
+    const c = comps[0]!;
+    paintAll(p, comps, (q, r) => 'BCDEFG'[((q + 2 * r) % 6 + 6) % 6]!);
+    const t = c.tiles.find(x => x.full && c.byKey.get(`${x.q + 2},${x.r}`)?.full)!;
+    const other = `${t.q + 2},${t.r}`; // même rangée en flat, une colonne entre
+    const before = harmonyReport(p, comps);
+    p.walls[0]!.tiles[t.key]!.d = 'A';
+    p.walls[0]!.tiles[other]!.d = 'A';
+    const after = harmonyReport(p, comps);
+    expect(after.defects.filter(d => d.type === 'gap').map(d => d.cells.map(x => x.key))).toContainEqual([t.key, other]);
+    expect(after.counts.adjacent).toBe(before.counts.adjacent);
+    expect(after.counts.gap).toBe(before.counts.gap + 1);
+  });
+
   it('repère un alignement espacé d\'un carreau', () => {
     const { p, comps } = ready();
     const c = comps[0]!;

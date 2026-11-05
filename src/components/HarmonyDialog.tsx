@@ -10,6 +10,7 @@ import { DEFECT_COLORS, WallSvg } from './WallSvg';
 
 const LABELS: Record<DefectType, [string, string]> = {
   adjacent: ['voisin identique', 'voisins identiques'],
+  gap: ['paire à une colonne d\'écart', 'paires à une colonne d\'écart'],
   line: ['alignement', 'alignements'],
   pattern: ['répétition régulière', 'répétitions régulières'],
   clump: ['amas', 'amas'],

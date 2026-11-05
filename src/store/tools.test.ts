@@ -143,6 +143,28 @@ describe('Échanger', () => {
   });
 });
 
+describe('Remplacer', () => {
+  it('change le motif, verrouille le carreau et s\'annule d\'un coup', () => {
+    use('replace');
+    const key = keyAt(20, 15);
+    const before = tiles()[key]!.d;
+    expect(press(0, at([20, 15]), LEFT)).toBe(false);
+    expect(tiles()[key]).toMatchObject({ lk: true });
+    expect(tiles()[key]!.d).not.toBe(before);
+    expect(useStore.getState().past).toHaveLength(1);
+    undo();
+    expect(tiles()[key]!.d).toBe(before);
+  });
+
+  it('ignore le clic droit et les emplacements vides', () => {
+    use('replace');
+    const snapshot = JSON.stringify(tiles());
+    press(0, at([20, 15]), RIGHT);
+    press(0, at([500, 500]), LEFT);
+    expect(JSON.stringify(tiles())).toBe(snapshot);
+  });
+});
+
 describe('Pinceau zone', () => {
   it('retire en partant d\'un carreau posé', () => {
     use('toggle');

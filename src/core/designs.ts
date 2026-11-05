@@ -69,6 +69,46 @@ export function penaltiesFor(wall: Wall, comp: WallComp, t: PlacedTile): Record<
   return pen;
 }
 
+// Autre motif pour un carreau, tiré au hasard parmi les bons : jamais un voisin identique si on peut l'éviter, puis
+// la gêne des répétitions proches et l'écart aux poids, tous pans confondus. Un tirage pondéré plutôt que le meilleur
+// à coup sûr : recliquer propose autre chose. null s'il n'y a pas d'autre motif.
+const REPLACE_SPREAD = 12; // gêne qui divise par e la chance d'un motif face au meilleur
+const MAX_BALANCE = 2; // en carreaux : au-delà, l'écart aux poids ne compte pas plus
+
+export function proposeReplacement(project: Project, comps: WallComp[], wall: number, key: string, rng: () => number): string | null {
+  const w = project.walls[wall]!;
+  const t = comps[wall]!.byKey.get(key);
+  const current = w.tiles[key]?.d;
+  const ds = project.designs.filter(d => d.weight > 0 && d.key !== current);
+  if (!t || !ds.length) return null;
+  const counts: Record<string, number> = {};
+  let total = 0;
+  project.walls.forEach((x, i) => comps[i]!.tiles.forEach(p => {
+    if (x === w && p.key === key) return;
+    const d = x.tiles[p.key]?.d;
+    if (d) { bump(counts, d); total++; }
+  }));
+  const weights = ds.reduce((a, d) => a + d.weight, 0) + (project.designs.find(d => d.key === current)?.weight ?? 0);
+  const pen = penaltiesFor(w, comps[wall]!, t);
+  const cost = ds.map(d => {
+    const near = pen[d.key] ?? 0;
+    // avance du motif sur sa part, carreau remplacé compris
+    const ahead = (counts[d.key] ?? 0) + 1 - (total + 1) * d.weight / weights;
+    const balance = PENALTY_PER_TILE * Math.max(-MAX_BALANCE, Math.min(MAX_BALANCE, ahead));
+    return { key: d.key, tier: near >= ADJACENT_PENALTY ? 1 : 0, c: (near % ADJACENT_PENALTY) + balance };
+  });
+  const tier = Math.min(...cost.map(x => x.tier));
+  const ok = cost.filter(x => x.tier === tier);
+  const best = Math.min(...ok.map(x => x.c));
+  const odds = ok.map(x => Math.exp(-(x.c - best) / REPLACE_SPREAD));
+  let r = rng() * odds.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < ok.length; i++) {
+    r -= odds[i]!;
+    if (r <= 0) return ok[i]!.key;
+  }
+  return ok[ok.length - 1]!.key;
+}
+
 // Le mélange travaille sur des tableaux à part : le projet est souvent un brouillon immer, lent à lire en boucle.
 interface Slots {
   des: (string | null)[]; // motif de chaque emplacement posé, tous pans confondus

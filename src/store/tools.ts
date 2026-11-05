@@ -1,4 +1,5 @@
 // Outils de la scène. Ils travaillent en coordonnées du pan : la vue (plan ou photo) ne fait que convertir le pointeur.
+import { proposeReplacement } from '../core/designs';
 import { round1, snap } from '../core/geom';
 import type { PlacedTile } from '../core/compute';
 import { cm } from '../core/format';
@@ -100,6 +101,24 @@ function swapTile(i: number, x: number, y: number): void {
   });
 }
 
+// Remplacer : un clic donne au carreau un autre motif choisi au hasard parmi ceux qui ne créent pas de répétition
+// proche ; recliquer en propose un autre. Comme Peindre, le carreau est verrouillé et les quantités changent.
+function replaceTile(i: number, x: number, y: number): void {
+  if (!inWall(wallAt(i), x, y)) return;
+  const h = tileAtPoint(i, x, y);
+  if (!h.t) return;
+  const d = proposeReplacement(getProject(), getComps(), i, h.key, Math.random);
+  if (!d) {
+    showToast('Pas d\'autre motif à proposer.');
+    return;
+  }
+  commit(p => {
+    const t = p.walls[i]!.tiles[h.key] ?? (p.walls[i]!.tiles[h.key] = {});
+    t.d = d;
+    t.lk = true;
+  });
+}
+
 // Pinceau zone : mode 'add' ou 'del', fixé au début du tracé. Un réglage contraire est d'abord simplement annulé.
 function brushTile(i: number, x: number, y: number, mode: BrushState): void {
   const w = wallAt(i);
@@ -145,6 +164,10 @@ export function press(i: number, pt: StagePoint, info: PressInfo): boolean {
 
   if (tool === 'swap') {
     if (info.button !== 2) swapTile(i, x, y);
+    return false;
+  }
+  if (tool === 'replace') {
+    if (info.button !== 2) replaceTile(i, x, y);
     return false;
   }
   if (tool === 'toggle') {

@@ -9,7 +9,7 @@ import type { ImageStore } from '../core/project';
 import type { Project } from '../core/types';
 import { readSaved } from './persistence';
 
-export type Tool = 'paint' | 'rotate' | 'swap' | 'toggle' | 'zone' | 'obst' | 'grid' | 'calib';
+export type Tool = 'paint' | 'rotate' | 'swap' | 'replace' | 'toggle' | 'zone' | 'obst' | 'grid' | 'calib';
 export type View = 'plan' | 'photo';
 
 export interface UiState {

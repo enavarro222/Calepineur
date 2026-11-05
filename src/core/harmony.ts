@@ -17,7 +17,7 @@ import { unfold } from './layout';
 import { colorAffinity, colorChain } from './palette';
 import type { HarmonyStyle, Point, Project } from './types';
 
-export type DefectType = 'adjacent' | 'line' | 'pattern' | 'clump' | 'tone' | 'clash';
+export type DefectType = 'adjacent' | 'gap' | 'line' | 'pattern' | 'clump' | 'tone' | 'clash';
 
 export interface TileRef {
   wall: number;
@@ -69,6 +69,7 @@ interface Pair {
   same: number; // coût si les deux carreaux ont le même motif
   tone: number; // coût si leurs teintes s'écartent de la moyenne du même côté
   adjacent: boolean;
+  gap: boolean; // à une colonne d'écart
 }
 
 // Trois carreaux à pas constant : c'est ce que l'œil lit comme une ligne, ou comme une trame quand elle se répète.
@@ -127,7 +128,8 @@ const COLOR_COST = 4;
 const TARGET_COST = 22;
 const CLASH_MAX = 0.2; // parenté sous laquelle deux voisins n'ont pas de couleur commune
 const WAVES = 6;
-const DEFECT_POINTS: Record<DefectType, number> = { adjacent: 3, line: 2, pattern: 1, clump: 1, tone: 1, clash: 0.25 };
+// Une colonne d'écart pèse peu : avec peu de motifs, on ne peut pas toutes les éviter.
+const DEFECT_POINTS: Record<DefectType, number> = { adjacent: 3, gap: 0.5, line: 2, pattern: 1, clump: 1, tone: 1, clash: 0.25 };
 const SCORE_SLOPE = 3;
 const PROPOSALS = 4;
 
@@ -250,9 +252,9 @@ function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): M
         if (dist > RING2_RADIUS || dist < SPLIT_TILE) continue;
         const f = Math.min(ca.frac, cb.frac);
         const near = 1 / dist ** 2;
-        const oneColumn = style === 'natural' && Math.abs(dist - SQ3) < 0.1;
-        const same = dist < 1.1 ? ADJACENT_COST : oneColumn ? ONE_COLUMN_COST : NEAR_COST * near;
-        pairs.push({ a, b, same: f * same, tone: TONE_COST * near, adjacent: dist < 1.1 });
+        const gap = Math.abs(dist - SQ3) < 0.1;
+        const same = dist < 1.1 ? ADJACENT_COST : gap && style === 'natural' ? ONE_COLUMN_COST : NEAR_COST * near;
+        pairs.push({ a, b, same: f * same, tone: TONE_COST * near, adjacent: dist < 1.1, gap });
         ring2[a]!.push(b);
         ring2[b]!.push(a);
         if (dist < 1.1) {
@@ -365,6 +367,10 @@ function report(m: Model, project: Project): HarmonyReport {
       if (a < b && ca.design === cb.design && isVisible(ca) && isVisible(cb)) defects.push({ type: 'adjacent', cells: [ref(ca), ref(cb)] });
     }
   });
+  for (const p of m.pairs) {
+    const [ca, cb] = [cells[p.a]!, cells[p.b]!];
+    if (p.gap && ca.design === cb.design && isVisible(ca) && isVisible(cb)) defects.push({ type: 'gap', cells: [ref(ca), ref(cb)] });
+  }
   for (const l of m.lines) {
     const [a, b, c] = [cells[l.a]!, cells[l.b]!, cells[l.c]!];
     if (l.shown && a.design === b.design && b.design === c.design && isVisible(a) && isVisible(b) && isVisible(c)) {
@@ -375,7 +381,7 @@ function report(m: Model, project: Project): HarmonyReport {
   // couleur commune.
   if (m.style === 'natural') defects.push(...clumpDefects(m, project), ...toneDefects(m));
   else defects.push(...clashDefects(m));
-  const counts: Record<DefectType, number> = { adjacent: 0, line: 0, pattern: 0, clump: 0, tone: 0, clash: 0 };
+  const counts: Record<DefectType, number> = { adjacent: 0, gap: 0, line: 0, pattern: 0, clump: 0, tone: 0, clash: 0 };
   let points = 0;
   for (const d of defects) {
     counts[d.type]++;

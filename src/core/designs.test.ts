@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeWalls } from './compute';
-import { ensureAssigned, pickDesign, pickRot, pruneTiles, shuffleDesigns } from './designs';
+import { ensureAssigned, pickDesign, pickRot, proposeReplacement, pruneTiles, shuffleDesigns } from './designs';
+import { mulberry32 } from './geom';
 import { project, wall } from '../test/fixtures';
 import type { Project } from './types';
 
@@ -166,4 +167,42 @@ describe('pruneTiles', () => {
 it('compte plusieurs pans ensemble', () => {
   const { p } = assigned({ walls: [wall(), wall({ id: 'w2' })] });
   expect(Object.keys(p.walls[1]!.tiles).length).toBeGreaterThan(0);
+});
+
+describe('proposeReplacement', () => {
+  const seven = () => 'ABCDEFG'.split('').map(key => ({ key, name: key, img: '', color: '#000000', weight: 1 }));
+
+  it('propose un autre motif, sans voisin identique ni colonne d\'écart quand c\'est possible', () => {
+    const { p, comps } = assigned({ designs: [...seven(), { key: 'H', name: 'H', img: '', color: '#000000', weight: 1 }] });
+    const c = comps[0]!;
+    const w = p.walls[0]!;
+    const t = c.tiles.find(x => x.full && c.g.near(x.q, x.r).every(([q, r]) => c.byKey.has(`${q},${r}`)))!;
+    // voisins : D à H ; à une colonne d'écart : A ; le carreau : B. Seul C ne se répète pas à proximité.
+    w.tiles[t.key]!.d = 'B';
+    let n = 0;
+    for (const [q, r, lvl] of c.g.near(t.q, t.r)) {
+      if (lvl === 1) w.tiles[`${q},${r}`]!.d = 'DEFGH'[n++ % 5]!;
+      if (lvl === 2) w.tiles[`${q},${r}`]!.d = 'A';
+    }
+    const rng = mulberry32(7);
+    for (let k = 0; k < 30; k++) expect(proposeReplacement(p, comps, 0, t.key, rng)).toBe('C');
+    // sans C, mieux vaut A à une colonne d'écart qu'un voisin identique
+    p.designs.find(d => d.key === 'C')!.weight = 0;
+    for (let k = 0; k < 30; k++) expect(proposeReplacement(p, comps, 0, t.key, rng)).toBe('A');
+  });
+
+  it('varie d\'un tirage à l\'autre', () => {
+    const { p, comps } = assigned({ designs: seven() });
+    const t = comps[0]!.tiles.find(x => x.full)!;
+    const rng = mulberry32(3);
+    const seen = new Set(Array.from({ length: 40 }, () => proposeReplacement(p, comps, 0, t.key, rng)));
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('jamais un motif de poids nul, et rien s\'il n\'y a pas d\'autre choix', () => {
+    const { p, comps } = assigned();
+    const t = comps[0]!.tiles[0]!;
+    p.designs.forEach(d => { d.weight = d.key === p.walls[0]!.tiles[t.key]!.d ? 1 : 0; });
+    expect(proposeReplacement(p, comps, 0, t.key, mulberry32(1))).toBeNull();
+  });
 });
