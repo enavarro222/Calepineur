@@ -69,7 +69,7 @@ interface Pair {
   same: number; // coût si les deux carreaux ont le même motif
   tone: number; // coût si leurs teintes s'écartent de la moyenne du même côté
   adjacent: boolean;
-  gap: boolean; // à une colonne d'écart
+  gap: boolean; // sur une même rangée, à une colonne d'écart
 }
 
 // Trois carreaux à pas constant : c'est ce que l'œil lit comme une ligne, ou comme une trame quand elle se répète.
@@ -101,7 +101,8 @@ interface Model {
 
 const ADJACENT_COST = 12;
 const NEAR_COST = 0.5;
-// Deux motifs identiques à une colonne d'écart (√3 pas : même rangée en flat) se lisent comme une paire alignée.
+// Deux motifs identiques sur une même rangée à une colonne d'écart (√3 pas à l'horizontale en flat) se lisent comme
+// une paire alignée ; à √3 pas en biais, ils se remarquent bien moins et comptent comme une répétition proche.
 // Plus fort, il pousserait vers un pavage régulier ; les styles de couleur gardent leur réglage.
 const ONE_COLUMN_COST = 1;
 const SQ3 = Math.sqrt(3);
@@ -237,7 +238,8 @@ function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): M
   const ring2: number[][] = cells.map(() => []);
 
   // Les voisinages suivent la suite dépliée des pans : deux carreaux de part et d'autre d'un angle sont voisins.
-  const d = comps[0]?.g.d ?? 1;
+  const g = comps[0]?.g;
+  const d = g?.d ?? 1;
   const runs = new Map<number, number[]>();
   cells.forEach((c, i) => runs.set(c.run, [...(runs.get(c.run) ?? []), i]));
   for (const runCells of runs.values()) {
@@ -252,7 +254,7 @@ function buildModel(project: Project, comps: WallComp[], style: HarmonyStyle): M
         if (dist > RING2_RADIUS || dist < SPLIT_TILE) continue;
         const f = Math.min(ca.frac, cb.frac);
         const near = 1 / dist ** 2;
-        const gap = Math.abs(dist - SQ3) < 0.1;
+        const gap = Math.abs(dist - SQ3) < 0.1 && !!g?.isRow(ca.u[0] - cb.u[0], ca.u[1] - cb.u[1]);
         const same = dist < 1.1 ? ADJACENT_COST : gap && style === 'natural' ? ONE_COLUMN_COST : NEAR_COST * near;
         pairs.push({ a, b, same: f * same, tone: TONE_COST * near, adjacent: dist < 1.1, gap });
         ring2[a]!.push(b);

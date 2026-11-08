@@ -20,7 +20,7 @@ Calepineur gère aujourd'hui les carreaux hexagonaux.
 
 Le mélange équilibre les quantités et évite deux motifs identiques côte à côte. Cette règle n'est garantie qu'à partir de 7 motifs, car un carreau a 6 voisins.
 
-La note d'harmonie compte les voisins identiques, les paires identiques à une colonne d'écart, les alignements de trois carreaux, les répétitions à pas constant, les amas d'un même motif et les taches ou lignes claires ou sombres. Harmoniser ne fait qu'échanger des carreaux d'un même pan : les quantités ne changent pas, ni au total ni par pan, et les carreaux peints ou échangés à la main restent en place. Le but est un aspect naturel, pas un écartement maximal, qui créerait une trame régulière. La teinte d'un motif vient de sa couleur, calculée quand son image est chargée.
+La note d'harmonie compte les voisins identiques, les paires identiques à une colonne d'écart sur une même rangée, les alignements de trois carreaux, les répétitions à pas constant, les amas d'un même motif et les taches ou lignes claires ou sombres. Harmoniser ne fait qu'échanger des carreaux d'un même pan : les quantités ne changent pas, ni au total ni par pan, et les carreaux peints ou échangés à la main restent en place. Le but est un aspect naturel, pas un écartement maximal, qui créerait une trame régulière. La teinte d'un motif vient de sa couleur, calculée quand son image est chargée.
 
 Harmoniser propose trois styles :
 

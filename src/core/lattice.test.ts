@@ -23,11 +23,17 @@ describe.each<Orient>(['flat', 'pointy'])('réseau hexagonal %s', orient => {
   it('classe les emplacements à deux pas par éloignement', () => {
     const c = g.center(3, -2, 0, 0);
     const ns = g.near(3, -2);
-    const dist = { 1: 1, 2: Math.sqrt(3), 3: 2 };
-    for (const lvl of [1, 2, 3] as const) expect(ns.filter(n => n[2] === lvl)).toHaveLength(6);
+    // 6 voisins, 2 à une colonne d'écart sur la même rangée, 4 à √3 en biais et 6 à deux pas en ligne droite
+    expect([1, 2, 3].map(lvl => ns.filter(n => n[2] === lvl).length)).toEqual([6, 2, 10]);
     for (const [nq, nr, lvl] of ns) {
       const n = g.center(nq, nr, 0, 0);
-      expect(Math.hypot(n[0] - c[0], n[1] - c[1])).toBeCloseTo(g.d * dist[lvl], 6);
+      const k = Math.hypot(n[0] - c[0], n[1] - c[1]) / g.d;
+      if (lvl === 1) expect(k).toBeCloseTo(1, 6);
+      if (lvl === 2) {
+        expect(k).toBeCloseTo(Math.sqrt(3), 6);
+        expect(orient === 'flat' ? n[1] - c[1] : n[0] - c[0]).toBeCloseTo(0, 6);
+      }
+      if (lvl === 3) expect([Math.sqrt(3), 2].some(x => Math.abs(k - x) < 1e-6)).toBe(true);
     }
   });
 

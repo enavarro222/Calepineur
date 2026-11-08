@@ -8,8 +8,8 @@ export function designMap(project: Pick<Project, 'designs'>): Map<string, Design
   return new Map(project.designs.map(d => [d.key, d]));
 }
 
-// Gêne d'un motif répété selon l'éloignement (voir Lattice.near) : côte à côte quasi interdit, puis aligné à une
-// colonne d'écart, ce qui saute aux yeux, puis en ligne droite avec un carreau entre. Écarter plus fort la colonne
+// Gêne d'un motif répété selon l'éloignement (voir Lattice.near) : côte à côte quasi interdit, puis sur une même
+// rangée à une colonne d'écart, ce qui saute aux yeux, puis en biais ou en ligne droite avec un carreau entre. Écarter plus fort la colonne
 // d'écart ferait doubler les lignes droites quand il y a peu de motifs.
 const ADJACENT_PENALTY = 1000;
 const NEAR_PENALTY = [0, ADJACENT_PENALTY, 30, 8] as const;
