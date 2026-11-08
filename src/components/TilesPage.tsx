@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { computeWall } from '../core/compute';
-import { penaltiesFor, pickDesign, pickRot } from '../core/designs';
+import { ensureAssigned } from '../core/designs';
 import { cm } from '../core/format';
-import { hashStr, mulberry32 } from '../core/geom';
+import { hashStr } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import { designColors, MAX_COLORS } from '../core/palette';
 import type { Design, Project, RotMode, Wall } from '../core/types';
@@ -51,13 +51,8 @@ function usePreview(project: Project) {
       zone: [[-50, -50], [-50, H + 50], [W + 50, H + 50], [W + 50, -50]], obstacles: [], photo: null, tiles: {},
     };
     const comp = computeWall({ tile: { ...project.tile, edgeGap: 0 } }, wall);
-    const rng = mulberry32(hashStr(`prev:${project.seed}`));
-    const counts: Record<string, number> = {};
-    for (const t of comp.tiles) {
-      const d = pickDesign(project, counts, penaltiesFor(wall, comp, t), rng);
-      wall.tiles[t.key] = { d, rot: pickRot(project, rng) };
-      if (d) counts[d] = (counts[d] ?? 0) + 1;
-    }
+    // le même remplissage que les nouveaux carreaux d'un pan
+    ensureAssigned({ ...project, seed: hashStr(`prev:${project.seed}`), walls: [wall] }, [comp]);
     return { wall, comp };
   }, [project]);
 }
@@ -148,7 +143,7 @@ export function TilesPage() {
             <button onClick={() => shuffle(true)}>Mélanger (garder mes choix)</button>
             <button onClick={() => { if (window.confirm('Re-mélanger tous les carreaux, y compris ceux peints ou pivotés à la main ?')) shuffle(false); }}>Tout re-mélanger</button>
           </div>
-          <p className="hint">Le mélange équilibre les quantités selon les poids et évite deux motifs identiques côte à côte, et autant que possible alignés à une colonne d'écart. La rotation s'applique au prochain mélange. Si tu as choisi un style dans Harmoniser, le mélange en tire une nouvelle variante.</p>
+          <p className="hint">Le mélange suit les poids au carreau près, puis cherche comme Harmoniser la répartition avec le moins de défauts : voisins identiques, colonnes d'écart, alignements, répétitions, amas et taches. La rotation s'applique au prochain mélange. Si tu as choisi un style dans Harmoniser, le mélange en tire une nouvelle variante.</p>
         </section>
 
         <section className="card preview"><h3>Aperçu</h3><div id="tile-preview"><Preview /></div></section>

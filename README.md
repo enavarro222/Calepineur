@@ -18,15 +18,29 @@ Calepineur gère aujourd'hui les carreaux hexagonaux.
 6. **Motifs** : *Mélanger*, ou peindre et pivoter carreau par carreau (touches 1 à 9 pour choisir le motif). *Harmoniser* propose plusieurs répartitions à choisir, *Défauts* surligne ce qui accroche l'œil, *Échanger* intervertit deux carreaux à la main, et *Remplacer* propose pour un carreau un autre motif qui ne se répète pas à proximité (reclique pour une autre proposition).
 7. **Commande**, puis **Calepinage** → Imprimer / PDF : plan étiqueté, repères de traçage et vignettes cotées de chaque coupe.
 
-Le mélange équilibre les quantités et évite deux motifs identiques côte à côte. Cette règle n'est garantie qu'à partir de 7 motifs, car un carreau a 6 voisins.
+Une seule liste de défauts sert partout : la note d'harmonie et *Défauts* les montrent, *Harmoniser*, *Mélanger*, *Remplacer* et le remplissage des nouveaux carreaux cherchent à en avoir le moins possible. Chaque défaut vaut des points :
 
-La note d'harmonie compte les voisins identiques, les paires identiques à une colonne d'écart sur une même rangée, les alignements de trois carreaux, les répétitions à pas constant, les amas d'un même motif et les taches ou lignes claires ou sombres. Harmoniser ne fait qu'échanger des carreaux d'un même pan : les quantités ne changent pas, ni au total ni par pan, et les carreaux peints ou échangés à la main restent en place. Le but est un aspect naturel, pas un écartement maximal, qui créerait une trame régulière. La teinte d'un motif vient de sa couleur, calculée quand son image est chargée.
+| Défaut | Points |
+|---|---|
+| Deux voisins identiques | 3 |
+| Trois carreaux identiques alignés, côte à côte, à une colonne ou à un carreau d'écart | 1 |
+| Deux carreaux identiques sur une même rangée, une colonne entre | 0,5 |
+| Trois carreaux identiques à un autre pas constant | 0,25 |
+| Un carreau en amas : son motif revient nettement plus que sa part autour de lui | 0,25 |
+| Quatre voisins clairs, ou sombres, en losange ou en ligne droite (style Naturel) | 0,25 |
+| Deux voisins sans couleur commune (styles Vagues et Dégradé) | 0,25 |
+
+Les morceaux de moins de 20 % d'un carreau ne comptent pas. Avec 7 motifs ou plus, deux voisins identiques sont toujours évitables, car un carreau a 6 voisins.
+
+*Mélanger* donne à chaque motif sa part selon les poids, au carreau près, la pose au hasard, puis fait la même recherche qu'Harmoniser. Harmoniser ne fait qu'échanger des carreaux d'un même pan : les quantités ne changent pas, ni au total ni par pan, et les carreaux peints ou échangés à la main restent en place. Le but est un aspect naturel, pas un écartement maximal, qui créerait une trame régulière. La teinte d'un motif vient de sa couleur, calculée quand son image est chargée.
 
 Harmoniser propose trois styles :
 
 - **Naturel** : le mélange décrit ci-dessus.
-- **Vagues de couleur** : les voisins partagent une couleur, et les teintes se regroupent en vagues irrégulières.
+- **Vagues de couleur** : les teintes se regroupent en vagues irrégulières, et deux voisins sans couleur commune comptent comme un défaut.
 - **Dégradé** : les motifs suivent leur couleur dominante, du plus sombre au plus clair, avec une proposition par sens (gauche-droite, droite-gauche, bas-haut, diagonale).
+
+Dans ces deux styles, chaque motif est en plus attiré vers sa zone de la vague ou du dégradé : c'est le seul critère qui n'est pas un défaut. Les amas et les taches de teinte y sont voulus.
 
 Les voisinages traversent les angles communs : deux carreaux de part et d'autre d'un angle ne doivent pas être identiques, et les deux morceaux d'un carreau coupé par l'angle ne comptent pas comme voisins. Une fois un style choisi, *Mélanger* en tire une nouvelle variante, dans le même sens pour un dégradé.
 

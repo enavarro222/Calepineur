@@ -80,25 +80,6 @@ function hexLattice(tile: TileSpec) {
     return out;
   }
 
-  // Emplacements à deux pas au plus, avec leur gêne pour un motif répété : 1 = côte à côte, 2 = une colonne entre
-  // sur la même rangée (√3 pas à l'horizontale en flat, à la verticale en pointy), ce qui saute aux yeux, 3 = à √3 pas
-  // en biais ou en ligne droite avec un carreau entre (2 pas), qui se remarquent bien moins.
-  function near(q: number, r: number): [number, number, 1 | 2 | 3][] {
-    const out: [number, number, 1 | 2 | 3][] = [];
-    const c0 = center(q, r, 0, 0);
-    for (let dq = -2; dq <= 2; dq++) {
-      for (let dr = -2; dr <= 2; dr++) {
-        if (!dq && !dr) continue;
-        const c = center(q + dq, r + dr, 0, 0);
-        const k = Math.hypot(c[0] - c0[0], c[1] - c0[1]) / d;
-        if (k < 1.01) out.push([q + dq, r + dr, 1]);
-        else if (k < 1.74) out.push([q + dq, r + dr, isRow(c[0] - c0[0], c[1] - c0[1]) ? 2 : 3]);
-        else if (k < 2.01) out.push([q + dq, r + dr, 3]);
-      }
-    }
-    return out;
-  }
-
   // Deux carreaux sur une même rangée : à l'horizontale en flat, à la verticale en pointy (le même dessin tourné).
   function isRow(dx: number, dy: number): boolean {
     return Math.abs(flat ? dy : dx) < 0.1 * d;
@@ -119,7 +100,7 @@ function hexLattice(tile: TileSpec) {
   const nearAxes = (flat ? [30, 90, 150] : [0, 60, 120]).map(axis);
   const farAxes = (flat ? [0, 60, 120] : [30, 90, 150]).map(axis);
 
-  return { F, j, R, d, flat, base, px, py, area: SQ3 / 2 * F * F, center, verts, nearest, neighbors, near, isRow, range, nearAxes, farAxes };
+  return { F, j, R, d, flat, base, px, py, area: SQ3 / 2 * F * F, center, verts, nearest, neighbors, isRow, range, nearAxes, farAxes };
 }
 
 export const latticeFor = (tile: TileSpec): Lattice => hexLattice(tile);

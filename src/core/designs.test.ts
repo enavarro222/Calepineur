@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { near } from '../test/near';
 import { computeWalls } from './compute';
-import { ensureAssigned, pickDesign, pickRot, proposeReplacement, pruneTiles, shuffleDesigns } from './designs';
+import { ensureAssigned, pickRot, proposeReplacement, pruneTiles, shuffleDesigns } from './designs';
+import { harmonyReport } from './harmony';
+import { DEFECT_POINTS } from './rules';
 import { mulberry32 } from './geom';
 import { project, wall } from '../test/fixtures';
 import type { Project } from './types';
@@ -11,6 +14,9 @@ function assigned(over: Partial<Project> = {}) {
   ensureAssigned(p, comps);
   return { p, comps };
 }
+
+// Morceau assez grand pour compter dans la note et les répartitions.
+const seen = (c: { byKey: Map<string, { frac: number }> }, key: string): boolean => (c.byKey.get(key)?.frac ?? 0) >= 0.2;
 
 const countByDesign = (p: Project): Record<string, number> => {
   const out: Record<string, number> = {};
@@ -24,7 +30,8 @@ describe('ensureAssigned', () => {
     for (const t of comps[0]!.tiles) expect(['A', 'B', 'C']).toContain(p.walls[0]!.tiles[t.key]?.d);
   });
 
-  // Un carreau a 6 voisins : à partir de 7 motifs, il reste toujours un choix libre.
+  // Un carreau a 6 voisins : à partir de 7 motifs, il reste toujours un choix libre. Comme dans la note, les miettes
+  // (moins de 20 % d'un carreau) ne comptent pas.
   it('évite deux motifs identiques côte à côte', () => {
     const designs = 'ABCDEFG'.split('').map(key => ({ key, name: key, img: '', color: '#000000', weight: 1 }));
     const { p, comps } = assigned({ designs });
@@ -33,7 +40,7 @@ describe('ensureAssigned', () => {
     for (const t of c.tiles) {
       for (const [q, r] of c.g.neighbors(t.q, t.r)) {
         const n = w.tiles[`${q},${r}`];
-        if (n && c.byKey.has(`${q},${r}`)) expect(n.d).not.toBe(w.tiles[t.key]!.d);
+        if (n && seen(c, `${q},${r}`) && seen(c, t.key)) expect(n.d).not.toBe(w.tiles[t.key]!.d);
       }
     }
   });
@@ -69,30 +76,28 @@ describe('ensureAssigned', () => {
   });
 });
 
-describe('pickDesign', () => {
-  const rng = () => 0;
+describe('remplissage des nouveaux carreaux', () => {
+  const points = (r: ReturnType<typeof harmonyReport>) => r.defects.reduce((s, d) => s + DEFECT_POINTS[d.type], 0);
 
-  it('choisit le moins utilisé', () => {
-    expect(pickDesign(project(), { A: 5, B: 1, C: 5 }, {}, rng)).toBe('B');
-  });
-
-  it('accepte un voisin identique plutôt que rien', () => {
-    expect(pickDesign(project(), {}, { A: 1000, B: 1000, C: 1000 }, rng)).toBeTruthy();
-  });
-
-  it('écarte un voisin identique même au prix de l\'équilibre', () => {
-    expect(pickDesign(project(), { A: 9, B: 0, C: 0 }, { B: 1000, C: 1000 }, rng)).toBe('A');
-  });
-
-  it('préfère, à équilibre égal, le motif le moins répété autour', () => {
-    expect(pickDesign(project(), {}, { B: 30, C: 8 }, rng)).toBe('A');
-    expect(pickDesign(project(), {}, { A: 30, B: 8 }, rng)).toBe('C');
+  it('choisit le motif qui crée le moins de points de défaut, comme la note', () => {
+    const designs = 'ABCDE'.split('').map(key => ({ key, name: key, img: '', color: '#000000', weight: 1 }));
+    const { p, comps } = assigned({ designs, walls: [wall({ W: 120, H: 70 })] });
+    const t = comps[0]!.tiles.find(x => x.full && x.c[0] > 40 && x.c[1] > 25)!;
+    const cost = (d: string) => {
+      p.walls[0]!.tiles[t.key]!.d = d;
+      return points(harmonyReport(p, comps));
+    };
+    const least = Math.min(...'ABCDE'.split('').map(cost));
+    p.walls[0]!.tiles[t.key]!.d = 'disparu';
+    ensureAssigned(p, comps);
+    expect(cost(p.walls[0]!.tiles[t.key]!.d!)).toBe(least);
   });
 
   it('retombe sur le premier motif si tous les poids sont nuls', () => {
-    const p = project();
-    p.designs.forEach(d => { d.weight = 0; });
-    expect(pickDesign(p, {}, {}, rng)).toBe('A');
+    const base = project();
+    base.designs.forEach(d => { d.weight = 0; });
+    const { p } = assigned({ designs: base.designs });
+    expect(Object.keys(countByDesign(p))).toEqual(['A']);
   });
 });
 
@@ -117,17 +122,40 @@ describe('shuffleDesigns', () => {
       shuffleDesigns(p, comps, false);
       const same = [0, 0, 0, 0];
       for (const t of c.tiles) {
-        for (const [q, r, lvl] of c.g.near(t.q, t.r)) {
+        for (const [q, r, lvl] of near(c.g, t.q, t.r)) {
           const k = `${q},${r}`;
-          if (c.byKey.has(k) && w.tiles[k]!.d === w.tiles[t.key]!.d) same[lvl] = (same[lvl] ?? 0) + 1;
+          if (seen(c, k) && seen(c, t.key) && w.tiles[k]!.d === w.tiles[t.key]!.d) same[lvl] = (same[lvl] ?? 0) + 1;
         }
       }
       // chaque paire est vue des deux côtés ; un mélange sans cette règle en laisse une centaine
       expect(same[1]).toBe(0);
       expect(same[2]! / 2).toBeLessThanOrEqual(12);
       const counts = Object.values(countByDesign(p));
-      expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(4);
+      expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('suit les poids au carreau près', () => {
+    const base = project();
+    base.designs[0]!.weight = 2;
+    const { p, comps } = assigned({ designs: base.designs });
+    shuffleDesigns(p, comps, false);
+    const counts = countByDesign(p);
+    const n = comps[0]!.tiles.length;
+    expect(Math.abs(counts.A! - n / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(counts.B! - counts.C!)).toBeLessThanOrEqual(1);
+  });
+
+  it('suit le style retenu', () => {
+    const CHAIN = ['#202830', '#3c4a52', '#58707a', '#7a9488', '#a0ad92', '#c8bfa0', '#e8dcc0'];
+    const designs = CHAIN.map((color, i) => ({ key: 'ABCDEFG'[i]!, name: 'ABCDEFG'[i]!, img: '', color, weight: 1 }));
+    const { p, comps } = assigned({ designs, walls: [wall({ W: 200, H: 60, zone: [[-10, -10], [-10, 70], [210, 70], [210, -10]] })], style: 'gradient', styleVariant: 0 });
+    shuffleDesigns(p, comps, false);
+    const side = (left: boolean) => {
+      const ts = comps[0]!.tiles.filter(t => (t.c[0] < 70) === left && (t.c[0] > 130) !== left);
+      return ts.reduce((s, t) => s + 'ABCDEFG'.indexOf(p.walls[0]!.tiles[t.key]!.d!), 0) / ts.length;
+    };
+    expect(side(true)).toBeLessThan(side(false) - 2);
   });
 
   it('garde les carreaux verrouillés', () => {
@@ -176,11 +204,12 @@ describe('proposeReplacement', () => {
     const { p, comps } = assigned({ designs: [...seven(), { key: 'H', name: 'H', img: '', color: '#000000', weight: 1 }] });
     const c = comps[0]!;
     const w = p.walls[0]!;
-    const t = c.tiles.find(x => x.full && c.g.near(x.q, x.r).every(([q, r]) => c.byKey.has(`${q},${r}`)))!;
-    // voisins : D à H ; à une colonne d'écart : A ; le carreau : B. Seul C ne se répète pas à proximité.
+    const t = c.tiles.find(x => x.full && near(c.g, x.q, x.r).every(([q, r]) => seen(c, `${q},${r}`)))!;
+    // voisins : D à H ; à une colonne d'écart : A, et aucun autre A ; le carreau : B. Seul C ne se répète pas à proximité.
+    for (const a of Object.values(w.tiles)) if (a.d === 'A') a.d = 'B';
     w.tiles[t.key]!.d = 'B';
     let n = 0;
-    for (const [q, r, lvl] of c.g.near(t.q, t.r)) {
+    for (const [q, r, lvl] of near(c.g, t.q, t.r)) {
       if (lvl === 1) w.tiles[`${q},${r}`]!.d = 'DEFGH'[n++ % 5]!;
       if (lvl === 2) w.tiles[`${q},${r}`]!.d = 'A';
     }

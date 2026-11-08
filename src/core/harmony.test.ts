@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { near } from '../test/near';
 import { computeWalls } from './compute';
 import { demoProject } from './demo';
 import { ensureAssigned } from './designs';
@@ -79,8 +80,8 @@ describe('harmonyReport', () => {
     const c = comps[0]!;
     paintAll(p, comps, (q, r) => 'BCDEFG'[((q + 2 * r) % 6 + 6) % 6]!);
     const sq3 = (u: { c: number[] }, t: { c: number[] }) => Math.abs(Math.hypot(u.c[0]! - t.c[0]!, u.c[1]! - t.c[1]!) / c.g.d - Math.sqrt(3)) < 0.01;
-    const t = c.tiles.find(x => x.full && c.g.near(x.q, x.r).every(([q, r]) => c.byKey.get(`${q},${r}`)?.full))!;
-    const diag = c.g.near(t.q, t.r).map(([q, r]) => c.byKey.get(`${q},${r}`)!).find(u => sq3(u, t) && Math.abs(u.c[1]! - t.c[1]!) > 0.01)!;
+    const t = c.tiles.find(x => x.full && near(c.g, x.q, x.r).every(([q, r]) => c.byKey.get(`${q},${r}`)?.full))!;
+    const diag = near(c.g, t.q, t.r).map(([q, r]) => c.byKey.get(`${q},${r}`)!).find(u => sq3(u, t) && Math.abs(u.c[1]! - t.c[1]!) > 0.01)!;
     const before = harmonyReport(p, comps);
     p.walls[0]!.tiles[t.key]!.d = 'A';
     p.walls[0]!.tiles[diag.key]!.d = 'A';

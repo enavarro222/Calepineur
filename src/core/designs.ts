@@ -1,47 +1,13 @@
-// Répartition des motifs : équilibrée selon les poids, sans deux motifs identiques côte à côte ni, autant que possible,
-// alignés à une colonne d'écart, reproductible.
-import type { PlacedTile, WallComp } from './compute';
+// Répartition des motifs, reproductible. Les défauts à éviter sont ceux de la note d'harmonie (voir rules.ts) :
+// Mélanger, le remplissage des nouveaux carreaux et Remplacer les comptent de la même façon qu'Harmoniser.
+import type { WallComp } from './compute';
 import { hashStr, mulberry32 } from './geom';
-import type { Design, Project, Wall } from './types';
+import { applyAssignment, arrange } from './harmony';
+import { buildModel, localPoints } from './rules';
+import type { Design, Project } from './types';
 
 export function designMap(project: Pick<Project, 'designs'>): Map<string, Design> {
   return new Map(project.designs.map(d => [d.key, d]));
-}
-
-// Gêne d'un motif répété selon l'éloignement (voir Lattice.near) : côte à côte quasi interdit, puis sur une même
-// rangée à une colonne d'écart, ce qui saute aux yeux, puis en biais ou en ligne droite avec un carreau entre. Écarter plus fort la colonne
-// d'écart ferait doubler les lignes droites quand il y a peu de motifs.
-const ADJACENT_PENALTY = 1000;
-const NEAR_PENALTY = [0, ADJACENT_PENALTY, 30, 8] as const;
-// Au tirage, le reste de la gêne compte comme une avance sur l'équilibre (10 = un carreau), plafonnée pour que les
-// poids gardent le dernier mot. Les échanges qui suivent ne changent plus les quantités.
-const PENALTY_PER_TILE = 10;
-const MAX_ADVANCE = 2;
-const SHUFFLE_TRIES = 3;
-const SPREAD_PASSES = 15;
-const SWAP_TRIES = 40;
-
-// pen : gêne de chaque motif à l'emplacement à remplir. Jamais un voisin identique si on peut l'éviter ; ensuite
-// la gêne restante s'ajoute à l'équilibre des poids.
-export function pickDesign(
-  project: Pick<Project, 'designs'>,
-  counts: Record<string, number>,
-  pen: Record<string, number>,
-  rng: () => number,
-): string | null {
-  const ds = project.designs.filter(d => d.weight > 0);
-  if (!ds.length) return project.designs[0]?.key ?? null;
-  let best = ds[0]!;
-  let bp = Infinity;
-  let bs = Infinity;
-  for (const d of ds) {
-    const total = pen[d.key] ?? 0;
-    const p = total >= ADJACENT_PENALTY ? 1 : 0; // un voisin identique ou plusieurs : à éviter pareil
-    const soft = Math.min(MAX_ADVANCE, (total % ADJACENT_PENALTY) / PENALTY_PER_TILE);
-    const s = ((counts[d.key] ?? 0) + rng() * 1.5) / d.weight + soft;
-    if (p < bp || (p === bp && s < bs)) { bp = p; bs = s; best = d; }
-  }
-  return best.key;
 }
 
 export function pickRot(project: Pick<Project, 'rotMode'>, rng: () => number): number {
@@ -50,194 +16,123 @@ export function pickRot(project: Pick<Project, 'rotMode'>, rng: () => number): n
   return 0;
 }
 
-// Emplacements posés autour de t, avec la gêne d'un motif répété.
-function nearKeys(comp: WallComp, t: PlacedTile): [string, number][] {
-  const out: [string, number][] = [];
-  for (const [q, r, lvl] of comp.g.near(t.q, t.r)) {
-    const k = `${q},${r}`;
-    if (comp.byKey.has(k)) out.push([k, NEAR_PENALTY[lvl]]);
-  }
-  return out;
+// Motifs à répartir, selon les poids. Sans aucun poids, le premier motif.
+function usableDesigns(project: Project): number[] {
+  const ds = project.designs.map((d, i) => (d.weight > 0 ? i : -1)).filter(i => i >= 0);
+  return ds.length || !project.designs.length ? ds : [0];
 }
 
-export function penaltiesFor(wall: Wall, comp: WallComp, t: PlacedTile): Record<string, number> {
-  const pen: Record<string, number> = {};
-  for (const [k, p] of nearKeys(comp, t)) {
-    const d = wall.tiles[k]?.d;
-    if (d) pen[d] = (pen[d] ?? 0) + p;
-  }
-  return pen;
+const weightOf = (project: Project, i: number): number => project.designs[i]!.weight || 1;
+
+// Donne un motif aux carreaux qui n'en ont pas encore (ou dont le motif a été supprimé), un par un : le moins de
+// points de défaut avec les carreaux déjà posés, puis le motif le plus en retard sur sa part.
+export function ensureAssigned(project: Project, comps: WallComp[]): void {
+  const dm = designMap(project);
+  const missing = project.walls.some((w, i) => comps[i]!.tiles.some(t => !dm.has(w.tiles[t.key]?.d ?? '')));
+  if (!missing || !project.designs.length) return;
+  const usable = usableDesigns(project);
+  const m = buildModel(project, comps, project.style ?? 'natural');
+  const d = m.designs;
+  const counts = project.designs.map(() => 0);
+  for (const x of d) if (x >= 0) counts[x]!++;
+  m.cells.forEach((c, i) => {
+    if (d[i]! >= 0) return;
+    const w = project.walls[c.wall]!;
+    const rng = mulberry32(hashStr(`${project.seed}:${w.id}:${c.key}`));
+    let best = -1;
+    let bp = Infinity;
+    let bs = Infinity;
+    for (const k of usable) {
+      d[i] = k;
+      const p = localPoints(m, d, i);
+      const s = (counts[k]! + rng() * 1.5) / weightOf(project, k);
+      if (p < bp || (p === bp && s < bs)) { bp = p; bs = s; best = k; }
+    }
+    d[i] = best;
+    if (best >= 0) counts[best]!++;
+    const a = w.tiles[c.key] ?? (w.tiles[c.key] = {});
+    a.d = project.designs[best]?.key ?? null;
+    if (a.rot == null) a.rot = pickRot(project, rng);
+  });
 }
 
-// Autre motif pour un carreau, tiré au hasard parmi les bons : jamais un voisin identique si on peut l'éviter, puis
-// la gêne des répétitions proches et l'écart aux poids, tous pans confondus. Un tirage pondéré plutôt que le meilleur
-// à coup sûr : recliquer propose autre chose. null s'il n'y a pas d'autre motif.
-const REPLACE_SPREAD = 12; // gêne qui divise par e la chance d'un motif face au meilleur
+// Autre motif pour un carreau, tiré au hasard parmi les bons : le moins de points de défaut, puis l'écart aux poids,
+// tous pans confondus. Un tirage pondéré plutôt que le meilleur à coup sûr : recliquer propose autre chose. null s'il
+// n'y a pas d'autre motif.
+const REPLACE_SPREAD = 1.2; // avance sur sa part, en carreaux, qui divise par e la chance d'un motif face au meilleur
 const MAX_BALANCE = 2; // en carreaux : au-delà, l'écart aux poids ne compte pas plus
 
 export function proposeReplacement(project: Project, comps: WallComp[], wall: number, key: string, rng: () => number): string | null {
-  const w = project.walls[wall]!;
-  const t = comps[wall]!.byKey.get(key);
-  const current = w.tiles[key]?.d;
-  const ds = project.designs.filter(d => d.weight > 0 && d.key !== current);
-  if (!t || !ds.length) return null;
-  const counts: Record<string, number> = {};
-  let total = 0;
-  project.walls.forEach((x, i) => comps[i]!.tiles.forEach(p => {
-    if (x === w && p.key === key) return;
-    const d = x.tiles[p.key]?.d;
-    if (d) { bump(counts, d); total++; }
-  }));
-  const weights = ds.reduce((a, d) => a + d.weight, 0) + (project.designs.find(d => d.key === current)?.weight ?? 0);
-  const pen = penaltiesFor(w, comps[wall]!, t);
-  const cost = ds.map(d => {
-    const near = pen[d.key] ?? 0;
-    // avance du motif sur sa part, carreau remplacé compris
-    const ahead = (counts[d.key] ?? 0) + 1 - (total + 1) * d.weight / weights;
-    const balance = PENALTY_PER_TILE * Math.max(-MAX_BALANCE, Math.min(MAX_BALANCE, ahead));
-    return { key: d.key, tier: near >= ADJACENT_PENALTY ? 1 : 0, c: (near % ADJACENT_PENALTY) + balance };
+  const m = buildModel(project, comps, project.style ?? 'natural');
+  const i = m.cells.findIndex(c => c.wall === wall && c.key === key);
+  const current = i >= 0 ? m.cells[i]!.design : -1;
+  const ds = project.designs.map((x, k) => (x.weight > 0 && k !== current ? k : -1)).filter(k => k >= 0);
+  if (i < 0 || !ds.length) return null;
+  const d = m.designs;
+  const counts = project.designs.map(() => 0);
+  d.forEach((x, n) => { if (x >= 0 && n !== i) counts[x]!++; });
+  const total = counts.reduce((a, b) => a + b, 0);
+  const weights = ds.reduce((a, k) => a + project.designs[k]!.weight, 0) + Math.max(0, project.designs[current]?.weight ?? 0);
+  const cost = ds.map(k => {
+    d[i] = k;
+    const ahead = counts[k]! + 1 - (total + 1) * project.designs[k]!.weight / weights; // carreau remplacé compris
+    return { k, points: localPoints(m, d, i), balance: Math.max(-MAX_BALANCE, Math.min(MAX_BALANCE, ahead)) };
   });
-  const tier = Math.min(...cost.map(x => x.tier));
-  const ok = cost.filter(x => x.tier === tier);
-  const best = Math.min(...ok.map(x => x.c));
-  const odds = ok.map(x => Math.exp(-(x.c - best) / REPLACE_SPREAD));
+  const least = Math.min(...cost.map(x => x.points));
+  const ok = cost.filter(x => x.points === least);
+  const best = Math.min(...ok.map(x => x.balance));
+  const odds = ok.map(x => Math.exp(-(x.balance - best) / REPLACE_SPREAD));
   let r = rng() * odds.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < ok.length; i++) {
-    r -= odds[i]!;
-    if (r <= 0) return ok[i]!.key;
+  for (let n = 0; n < ok.length; n++) {
+    r -= odds[n]!;
+    if (r <= 0) return project.designs[ok[n]!.k]!.key;
   }
-  return ok[ok.length - 1]!.key;
+  return project.designs[ok[ok.length - 1]!.k]!.key;
 }
 
-// Le mélange travaille sur des tableaux à part : le projet est souvent un brouillon immer, lent à lire en boucle.
-interface Slots {
-  des: (string | null)[]; // motif de chaque emplacement posé, tous pans confondus
-  near: [number, number][][]; // emplacements proches et gêne d'une répétition
-}
-
-const slotCost = (s: Slots, i: number): number => {
-  let c = 0;
-  const d = s.des[i];
-  if (!d) return 0;
-  for (const [n, p] of s.near[i]!) if (s.des[n] === d) c += p;
-  return c;
-};
-
-// Réduit les répétitions proches en échangeant deux à deux les motifs des emplacements mobiles : les quantités par
-// motif ne changent pas. Chaque emplacement gênant essaie quelques partenaires au hasard. Renvoie la gêne restante.
-function spreadDesigns(s: Slots, movable: number[], rng: () => number): number {
-  const order = movable.slice();
-  const swap = (i: number, j: number): void => { [s.des[i], s.des[j]] = [s.des[j]!, s.des[i]!]; };
-  for (let pass = 0; pass < SPREAD_PASSES; pass++) {
-    let improved = false;
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [order[i], order[j]] = [order[j]!, order[i]!];
+// Quantités de chaque motif pour n carreaux, au plus près des poids, carreaux gardés compris.
+function quotas(project: Project, kept: number[], n: number): number[] {
+  const usable = usableDesigns(project);
+  const q = project.designs.map(() => 0);
+  if (!usable.length) return q;
+  for (let k = 0; k < n; k++) {
+    let best = usable[0]!;
+    for (const x of usable) {
+      if ((kept[x]! + q[x]! + 1) / weightOf(project, x) < (kept[best]! + q[best]! + 1) / weightOf(project, best)) best = x;
     }
-    for (const i of order) {
-      if (!slotCost(s, i)) continue;
-      let best = -1;
-      let bestDelta = 0;
-      for (let n = 0; n < SWAP_TRIES; n++) {
-        const j = movable[Math.floor(rng() * movable.length)]!;
-        if (j === i || s.des[j] === s.des[i]) continue;
-        const before = slotCost(s, i) + slotCost(s, j);
-        swap(i, j);
-        const delta = slotCost(s, i) + slotCost(s, j) - before;
-        swap(i, j);
-        if (delta < bestDelta) { bestDelta = delta; best = j; }
-      }
-      if (best >= 0) {
-        swap(i, best);
-        improved = true;
-      }
-    }
-    if (!improved) break;
+    q[best]!++;
   }
-  return movable.reduce((c, i) => c + slotCost(s, i), 0);
+  return q;
 }
 
-const bump = (counts: Record<string, number>, key: string | null | undefined): void => {
-  if (key) counts[key] = (counts[key] ?? 0) + 1;
-};
-
-// Donne un motif aux carreaux qui n'en ont pas encore (ou dont le motif a été supprimé).
-export function ensureAssigned(project: Project, comps: WallComp[]): void {
-  const dm = designMap(project);
-  const counts: Record<string, number> = {};
-  project.walls.forEach((w, i) => comps[i]!.tiles.forEach(t => {
-    const d = w.tiles[t.key]?.d;
-    if (d && dm.has(d)) bump(counts, d);
-  }));
-  project.walls.forEach((w, i) => {
-    const comp = comps[i]!;
-    for (const t of comp.tiles) {
-      const a = w.tiles[t.key] ?? (w.tiles[t.key] = {});
-      if (a.d && dm.has(a.d)) continue;
-      const rng = mulberry32(hashStr(`${project.seed}:${w.id}:${t.key}`));
-      a.d = pickDesign(project, counts, penaltiesFor(w, comp, t), rng);
-      if (a.rot == null) a.rot = pickRot(project, rng);
-      bump(counts, a.d);
-    }
-  });
-}
-
-// Nouvelle répartition aléatoire (garde les carreaux verrouillés à la main si keepLocked).
-// Plusieurs essais : on garde celui qui répète le moins les motifs proches.
+// Nouvelle répartition : les quantités suivent les poids, posées au hasard, puis la même recherche qu'Harmoniser, dans
+// le style retenu, sans défaut si possible. Garde les carreaux verrouillés à la main si keepLocked.
 export function shuffleDesigns(project: Project, comps: WallComp[], keepLocked: boolean): void {
   const rng = mulberry32(hashStr(`shuffle:${project.seed}`));
-  const dm = designMap(project);
-  const counts0: Record<string, number> = {};
-  const s: Slots = { des: [], near: [] };
-  const movable: number[] = [];
-  const index = comps.map(() => new Map<string, number>());
+  const index = new Map(project.designs.map((d, i) => [d.key, i]));
+  const kept = project.designs.map(() => 0);
+  const movable: { wall: number; key: string }[] = [];
   project.walls.forEach((w, i) => comps[i]!.tiles.forEach(t => {
     const a = w.tiles[t.key];
-    const kept = keepLocked && a?.lk && a.d && dm.has(a.d) ? a.d : null;
-    index[i]!.set(t.key, s.des.length);
-    if (kept) bump(counts0, kept);
-    else movable.push(s.des.length);
-    s.des.push(kept);
+    const d = a?.d ? index.get(a.d) : undefined;
+    if (keepLocked && a?.lk && d !== undefined) kept[d]!++;
+    else movable.push({ wall: i, key: t.key });
   }));
-  comps.forEach((comp, i) => comp.tiles.forEach(t => {
-    s.near[index[i]!.get(t.key)!] = nearKeys(comp, t).map(([k, p]) => [index[i]!.get(k)!, p]);
-  }));
-
-  let best: (string | null)[] = [];
-  let bestCost = Infinity;
-  for (let attempt = 0; attempt < SHUFFLE_TRIES && bestCost > 0; attempt++) {
-    const counts = { ...counts0 };
-    for (const i of movable) s.des[i] = null;
-    const order = movable.slice();
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [order[i], order[j]] = [order[j]!, order[i]!];
-    }
-    for (const i of order) {
-      const pen: Record<string, number> = {};
-      for (const [n, p] of s.near[i]!) {
-        const d = s.des[n];
-        if (d) pen[d] = (pen[d] ?? 0) + p;
-      }
-      s.des[i] = pickDesign(project, counts, pen, rng);
-      bump(counts, s.des[i]);
-    }
-    const cost = spreadDesigns(s, movable, rng);
-    if (cost < bestCost) {
-      bestCost = cost;
-      best = s.des.slice();
-    }
+  const q = quotas(project, kept, movable.length);
+  const bag = q.flatMap((n, k) => Array<number>(n).fill(k));
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [bag[i], bag[j]] = [bag[j]!, bag[i]!];
   }
-
-  const isMovable = new Set(movable);
-  project.walls.forEach((w, i) => comps[i]!.tiles.forEach(t => {
-    const j = index[i]!.get(t.key)!;
-    if (!isMovable.has(j)) return;
-    const a = w.tiles[t.key] ?? (w.tiles[t.key] = {});
+  movable.forEach(({ wall, key }, n) => {
+    const tiles = project.walls[wall]!.tiles;
+    const a = tiles[key] ?? (tiles[key] = {});
     delete a.lk;
-    a.d = best[j] ?? null;
+    a.d = project.designs[bag[n] ?? -1]?.key ?? null;
     a.rot = pickRot(project, rng);
-  }));
+  });
+  const style = project.style ?? 'natural';
+  applyAssignment(project, arrange(project, comps, style, project.styleVariant ?? 0, false));
 }
 
 // Supprime les entrées de carreaux inutiles (emplacements hors zone sans réglage manuel).

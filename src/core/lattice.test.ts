@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { near } from '../test/near';
 import { latticeFor } from './lattice';
 import { project } from '../test/fixtures';
 import type { Orient } from './types';
@@ -20,9 +21,9 @@ describe.each<Orient>(['flat', 'pointy'])('réseau hexagonal %s', orient => {
     }
   });
 
-  it('classe les emplacements à deux pas par éloignement', () => {
+  it('distingue la même rangée des biais à √3', () => {
     const c = g.center(3, -2, 0, 0);
-    const ns = g.near(3, -2);
+    const ns = near(g, 3, -2);
     // 6 voisins, 2 à une colonne d'écart sur la même rangée, 4 à √3 en biais et 6 à deux pas en ligne droite
     expect([1, 2, 3].map(lvl => ns.filter(n => n[2] === lvl).length)).toEqual([6, 2, 10]);
     for (const [nq, nr, lvl] of ns) {

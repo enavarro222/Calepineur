@@ -1,10 +1,9 @@
 // Actions de l'interface qui ne se limitent pas à changer une valeur.
-import { produce } from 'immer';
 import { demoProject } from '../core/demo';
 import { computeWalls } from '../core/compute';
 import { pruneTiles, shuffleDesigns } from '../core/designs';
 import { cm } from '../core/format';
-import { applyAssignment, applyStyle, harmonyProposals, type Assignment } from '../core/harmony';
+import { applyAssignment, applyStyle, type Assignment } from '../core/harmony';
 import { colLetters, round1 } from '../core/geom';
 import { latticeFor } from '../core/lattice';
 import { joinDy } from '../core/layout';
@@ -16,19 +15,14 @@ import { averageColor, cropImage, dominantColors, imageSize, readImageFile } fro
 import { removeUnusedImages, writeImage } from './persistence';
 import { commit, getComps, getProject, mutate, replaceProject, setUi, showToast, useStore } from './store';
 
-// Nouvelle répartition. Si un style d'harmonie a été choisi, elle en tire une nouvelle variante, dans le même sens.
+// Nouvelle répartition, dans le style d'harmonie retenu (le même sens pour un dégradé).
 export function shuffle(keepLocked: boolean): void {
   const comps = getComps();
-  const mixed = produce(getProject(), p => {
+  const style = getProject().style;
+  commit(p => {
     p.seed = (p.seed || 0) + 1;
     shuffleDesigns(p, comps, keepLocked);
     pruneTiles(p, comps);
-  });
-  const style = mixed.style;
-  const next = style ? harmonyProposals(mixed, comps, style, 1, mixed.styleVariant ?? 0)[0]?.project ?? mixed : mixed;
-  commit(p => {
-    p.seed = next.seed;
-    p.walls = next.walls;
   });
   if (style) showToast(`Nouvelle répartition, style « ${STYLE_NAMES[style]} » conservé.`);
 }

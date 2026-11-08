@@ -13,8 +13,8 @@ const LABELS: Record<DefectType, [string, string]> = {
   gap: ['paire à une colonne d\'écart', 'paires à une colonne d\'écart'],
   line: ['alignement', 'alignements'],
   pattern: ['répétition régulière', 'répétitions régulières'],
-  clump: ['amas', 'amas'],
-  tone: ['tache de teinte', 'taches de teinte'],
+  clump: ['carreau en amas', 'carreaux en amas'],
+  tone: ['tache ou ligne de teinte', 'taches ou lignes de teinte'],
   clash: ['paire sans couleur commune', 'paires sans couleur commune'],
 };
 
