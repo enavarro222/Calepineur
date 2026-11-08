@@ -6,11 +6,12 @@ import { computeWalls, type WallComp } from '../core/compute';
 import { demoProject } from '../core/demo';
 import { ensureAssigned } from '../core/designs';
 import type { ImageStore } from '../core/project';
-import type { Project } from '../core/types';
+import type { HarmonyStyle, Project } from '../core/types';
 import { readSaved } from './persistence';
 
 export type Tool = 'paint' | 'rotate' | 'swap' | 'replace' | 'toggle' | 'zone' | 'obst' | 'grid' | 'calib';
 export type View = 'plan' | 'photo';
+export type OverviewMode = 'plan' | 'photos' | 'global' | 'tints';
 
 export interface UiState {
   tab: string; // 'wall:<i>', 'overview', 'tiles', 'order' ou 'print'
@@ -24,6 +25,8 @@ export interface UiState {
   pending: Project | null; // configuration reçue par lien, en attente de validation
   defects: boolean;
   harmonyOpen: boolean;
+  harmonyStyle: HarmonyStyle | null; // style proposé à l'ouverture d'Harmoniser, sinon celui du projet
+  overviewMode: OverviewMode | null; // onglet de la vue d'ensemble, s'il a été choisi
   swapFrom: { wallId: string; key: string } | null; // premier carreau choisi avec l'outil Échanger
 }
 
@@ -67,7 +70,7 @@ function initialState(): AppState {
   const saved = readSaved();
   const base = saved?.project ?? demoProject();
   const { project, comps } = settle(base);
-  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false, pending: null, defects: false, harmonyOpen: false, swapFrom: null }, project);
+  const ui = fixUi({ tab: 'wall:0', view: {}, tool: 'paint', design: null, labels: false, cuts: true, lastWall: 0, aiOpen: false, pending: null, defects: false, harmonyOpen: false, harmonyStyle: null, overviewMode: null, swapFrom: null }, project);
   return { project, comps, images: saved?.images ?? {}, past: [], future: [], ui, toast: null };
 }
 

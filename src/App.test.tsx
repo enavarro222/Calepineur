@@ -9,6 +9,7 @@ import { serializeProject } from './core/project';
 import { project, wall } from './test/fixtures';
 import { release } from './store/tools';
 import { applyHash } from './store/bootstrap';
+import { addTint } from './store/actions';
 
 beforeEach(() => {
   release();
@@ -387,6 +388,46 @@ describe('harmonie', () => {
     expect(getProject().style).toBeUndefined();
     await user.click(screen.getByRole('button', { name: 'Mélanger' }));
     expect(getProject().style).toBeUndefined();
+  });
+
+  it('pose des repères de teinte et harmonise avec', async () => {
+    const { user, tab, container } = setup();
+    const [w1, w2] = getProject().walls;
+    await tab('Vue d\'ensemble');
+    await user.click(screen.getByRole('radio', { name: 'Teintes' }));
+    expect(screen.getByRole('button', { name: 'Harmoniser avec ces teintes' })).toBeDisabled();
+    const colors = screen.getAllByRole('button', { name: /^Teinte #/ });
+    expect(colors.length).toBeGreaterThan(1);
+    act(() => {
+      addTint(w1!.id, 20, 30, '#000000');
+      addTint(w2!.id, 100, 30, '#ffffff');
+    });
+    expect(container.querySelectorAll('[data-spot]')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: /Part demandée/ })).toHaveTextContent('% demandés');
+    // choisir un repère, puis une couleur : le repère prend cette couleur ; Suppr l'enlève
+    fireEvent.pointerDown(container.querySelector('[data-spot="0"]')!);
+    await user.click(colors[1]!);
+    const recolored = getProject().tints!.spots[0]!.color;
+    expect(recolored).toBe(colors[1]!.getAttribute('aria-label')!.slice(7, 14));
+    await user.keyboard('{Delete}');
+    expect(getProject().tints!.spots).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Harmoniser avec ces teintes' }));
+    const dialog = screen.getByRole('dialog', { name: 'Harmoniser la répartition' });
+    expect(within(dialog).getByRole('radio', { name: 'Mes teintes' })).toBeChecked();
+    const cards = await within(dialog).findAllByTestId('proposal');
+    await user.click(within(cards[0]!).getByRole('button', { name: 'Choisir' }));
+    expect(getProject().style).toBe('tints');
+  });
+
+  it('envoie poser des teintes quand il n\'y en a pas', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Harmoniser' }));
+    const dialog = screen.getByRole('dialog', { name: 'Harmoniser la répartition' });
+    await user.click(within(dialog).getByRole('radio', { name: 'Mes teintes' }));
+    expect(within(dialog).queryByRole('status')).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: 'Placer des teintes' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Teintes' })).toBeChecked();
   });
 
   it('se ferme avec Échap sans rien changer', async () => {

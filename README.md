@@ -34,17 +34,19 @@ Les morceaux de moins de 20 % d'un carreau ne comptent pas. Avec 7 motifs ou plu
 
 *Mélanger* donne à chaque motif sa part selon les poids, au carreau près, la pose au hasard, puis fait la même recherche qu'Harmoniser. Harmoniser ne fait qu'échanger des carreaux d'un même pan : les quantités ne changent pas, ni au total ni par pan, et les carreaux peints ou échangés à la main restent en place. Le but est un aspect naturel, pas un écartement maximal, qui créerait une trame régulière. La teinte d'un motif vient de sa couleur, calculée quand son image est chargée.
 
-Harmoniser propose trois styles :
+Harmoniser propose quatre styles :
 
 - **Naturel** : le mélange décrit ci-dessus.
-- **Vagues de couleur** : les teintes se regroupent en vagues irrégulières, et deux voisins sans couleur commune comptent comme un défaut.
+- **Vagues de couleur** : les teintes se regroupent en vagues irrégulières.
 - **Dégradé** : les motifs suivent leur couleur dominante, du plus sombre au plus clair, avec une proposition par sens (gauche-droite, droite-gauche, bas-haut, diagonale).
 
-Dans ces deux styles, chaque motif est en plus attiré vers sa zone de la vague ou du dégradé : c'est le seul critère qui n'est pas un défaut. Les amas et les taches de teinte y sont voulus.
+- **Mes teintes** : tu poses toi-même des repères de couleur sur les pans, dans *Vue d'ensemble* → *Teintes*. Les motifs qui ont cette couleur y sont attirés, et les teintes se fondent d'un repère à l'autre, d'un pan à l'autre ; le réglage *Transition* va de douce à franche. Les couleurs proposées sont celles des motifs. Pour chaque teinte, la vue compare la part des carreaux demandée à celle des carreaux disponibles : les quantités ne changent pas, une teinte trop demandée déborde sur les autres.
+
+Dans ces trois styles, chaque motif est en plus attiré vers sa zone : c'est le seul critère qui n'est pas un défaut. Les amas et les taches de teinte y sont voulus, et deux voisins sans couleur commune comptent comme un défaut.
 
 Les voisinages traversent les angles communs : deux carreaux de part et d'autre d'un angle ne doivent pas être identiques, et les deux morceaux d'un carreau coupé par l'angle ne comptent pas comme voisins. Une fois un style choisi, *Mélanger* en tire une nouvelle variante, dans le même sens pour un dégradé.
 
-Les styles Vagues et Dégradé échangent des carreaux entre les pans : le total commandé ne change pas, la part de chaque pan oui. Les couleurs primaire, secondaire et tertiaire de chaque motif sont lues au chargement de son image, avec une seule couleur pour un uni. Elles se corrigent dans *Carreaux & motifs*, et *Lire les couleurs des images* les relit.
+Les styles de couleur échangent des carreaux entre les pans : le total commandé ne change pas, la part de chaque pan oui. Les couleurs primaire, secondaire et tertiaire de chaque motif sont lues au chargement de son image, avec une seule couleur pour un uni. Elles se corrigent dans *Carreaux & motifs*, et *Lire les couleurs des images* les relit.
 
 ## Préparer le projet avec une IA
 

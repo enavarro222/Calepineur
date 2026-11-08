@@ -1,6 +1,6 @@
 // Lecture et écriture du fichier projet. Le contenu importé est validé champ par champ.
 import { isHexColor, MAX_COLORS } from './palette';
-import type { BrushState, CalibHint, CalibPoint, Design, Overview, DesignCrop, Obstacle, Point, Project, TileOverride, TileSpec, Wall, WallPhoto } from './types';
+import type { BrushState, CalibHint, CalibPoint, Design, Overview, DesignCrop, Obstacle, Point, Project, Tints, TileOverride, TileSpec, Wall, WallPhoto } from './types';
 
 export type ImageStore = Record<string, string>;
 
@@ -111,6 +111,17 @@ function parseOverview(v: unknown): Overview {
   return { src: str(o.src), opacity: optNum(o.opacity, 'overview.opacity', 1), blend: o.blend !== false, walls };
 }
 
+function parseTints(v: unknown): Tints {
+  const o = obj(v, 'tints');
+  const spots = arr(o.spots ?? [], 'tints.spots').map((x, i) => {
+    const q = obj(x, `tints.spots[${i}]`);
+    const color = q.color;
+    if (!isHexColor(color)) return fail(`tints.spots[${i}].color : couleur #rrggbb attendue`);
+    return { wall: str(q.wall), x: num(q.x, 'x'), y: num(q.y, 'y'), color };
+  });
+  return { spots, sharpness: Math.min(1, Math.max(0, optNum(o.sharpness, 'tints.sharpness', 0.3))) };
+}
+
 function parseCalib(v: unknown, what: string): CalibHint[] {
   const pts = arr(v, what);
   if (pts.length !== 4) fail(`${what} : 4 repères attendus`);
@@ -171,11 +182,12 @@ export function parseProject(v: unknown): Project {
     tile: parseTile(s.tile),
     rotMode: rot === '180' || rot === '60' ? rot : 'none',
     seed: optNum(s.seed, 'seed', 1),
-    ...(s.style === 'natural' || s.style === 'waves' || s.style === 'gradient' ? { style: s.style } : {}),
+    ...(s.style === 'natural' || s.style === 'waves' || s.style === 'gradient' || s.style === 'tints' ? { style: s.style } : {}),
     ...(typeof s.styleVariant === 'number' && Number.isInteger(s.styleVariant) ? { styleVariant: s.styleVariant } : {}),
     designs: arr(s.designs, 'designs').map(parseDesign),
     walls: arr(s.walls, 'walls').map(parseWall),
     ...(s.overview != null ? { overview: parseOverview(s.overview) } : {}),
+    ...(s.tints != null ? { tints: parseTints(s.tints) } : {}),
   };
 }
 

@@ -5,17 +5,17 @@ import { joinsPrevious, unfold } from '../core/layout';
 import { defaultCalib } from '../core/photo';
 import { imageUrl } from '../core/project';
 import { copyWallCalib, joinOverviewCalib, moveOverviewPoint, removeOverview, uploadOverview } from '../store/actions';
-import { commit, getProject, setUi, useStore } from '../store/store';
+import { commit, getProject, setUi, useStore, type OverviewMode } from '../store/store';
 import { FileButton, NumField, SegRadio } from './fields';
 import { PhotoComposite, type PhotoScale } from './PhotoComposite';
+import { TintView } from './TintView';
 import { WallSvg } from './WallSvg';
 
-type Mode = 'plan' | 'photos' | 'global';
-
-const MODES: { value: Mode; label: string }[] = [
+const MODES: { value: OverviewMode; label: string }[] = [
   { value: 'plan', label: 'Plan déplié' },
   { value: 'photos', label: 'Photos des pans' },
   { value: 'global', label: 'Photo d\'ensemble' },
+  { value: 'tints', label: 'Teintes' },
 ];
 
 // Les pans reliés par un angle se touchent ; une nouvelle suite commence sur une nouvelle ligne. Même échelle partout.
@@ -199,7 +199,9 @@ function placeWall(wallId: string, size: PhotoScale): void {
 export function OverviewPage() {
   const hasGlobal = useStore(s => !!s.project.overview);
   const hasPhotos = useStore(s => s.project.walls.some(w => w.photo));
-  const [mode, setMode] = useState<Mode>(hasGlobal ? 'global' : hasPhotos ? 'photos' : 'plan');
+  const chosen = useStore(s => s.ui.overviewMode);
+  const mode: OverviewMode = chosen ?? (hasGlobal ? 'global' : hasPhotos ? 'photos' : 'plan');
+  const setMode = (m: OverviewMode) => setUi({ overviewMode: m });
   return (
     <div id="page" className="overview">
       <div className="overview-bar">
@@ -208,6 +210,7 @@ export function OverviewPage() {
       {mode === 'plan' && <PlanView />}
       {mode === 'photos' && <PhotosView />}
       {mode === 'global' && <GlobalView />}
+      {mode === 'tints' && <TintView />}
     </div>
   );
 }

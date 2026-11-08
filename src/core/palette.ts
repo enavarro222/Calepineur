@@ -48,9 +48,14 @@ function shares(colors: string[]): { lab: Lab; w: number }[] {
   return colors.map((c, i) => ({ lab: hexToLab(c), w: ws[i]! / sum }));
 }
 
-// Part de la surface de a dont la couleur se retrouve dans b.
-function cover(a: { lab: Lab; w: number }[], b: { lab: Lab; w: number }[]): number {
-  return a.reduce((s, x) => s + x.w * Math.max(...b.map(y => Math.max(0, 1 - deltaE(x.lab, y.lab) / MATCH_DE))), 0);
+// Part de la surface de a dont la couleur se retrouve dans b, à tol près (écart ΔE où il n'y a plus rien de commun).
+function cover(a: { lab: Lab; w: number }[], b: { lab: Lab; w: number }[], tol = MATCH_DE): number {
+  return a.reduce((s, x) => s + x.w * Math.max(...b.map(y => Math.max(0, 1 - deltaE(x.lab, y.lab) / tol))), 0);
+}
+
+// Part de la surface d'un motif qui a cette couleur, de 0 à 1. tol : écart ΔE où il n'y a plus rien de commun.
+export function colorMatch(d: Pick<Design, 'color' | 'colors'>, color: string, tol = MATCH_DE): number {
+  return cover(shares(designColors(d)), [{ lab: hexToLab(color), w: 1 }], tol);
 }
 
 // Parenté de couleur entre motifs, de 0 (rien en commun) à 1 (mêmes couleurs).

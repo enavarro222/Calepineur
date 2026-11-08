@@ -9,7 +9,7 @@ export type Orient = 'flat' | 'pointy';
 export type RotMode = 'none' | '180' | '60';
 export type ZoneMode = 'organic' | 'cut';
 export type BrushState = 'add' | 'del';
-export type HarmonyStyle = 'natural' | 'waves' | 'gradient';
+export type HarmonyStyle = 'natural' | 'waves' | 'gradient' | 'tints';
 
 export interface TileSpec {
   F: number; // largeur plat à plat
@@ -106,6 +106,20 @@ export interface Overview {
   walls: Record<string, CalibPoint[]>; // calage de chaque pan, par identifiant de pan
 }
 
+// Style « Mes teintes » : des repères de couleur posés sur les pans ; les motifs qui ont cette couleur y sont attirés,
+// et les teintes se fondent d'un repère à l'autre.
+export interface TintSpot {
+  wall: string; // identifiant du pan
+  x: number; // cm, depuis le coin bas-gauche du pan
+  y: number;
+  color: string; // #rrggbb, prise parmi les couleurs des motifs
+}
+
+export interface Tints {
+  spots: TintSpot[];
+  sharpness: number; // de 0 (transitions douces) à 1 (zones franches)
+}
+
 export interface Project {
   version: 1;
   name: string;
@@ -114,6 +128,7 @@ export interface Project {
   seed: number;
   style?: HarmonyStyle; // style de la dernière répartition harmonisée, que Mélanger conserve
   styleVariant?: number; // sens du dégradé
+  tints?: Tints;
   designs: Design[];
   walls: Wall[];
   overview?: Overview;

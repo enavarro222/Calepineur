@@ -1,10 +1,11 @@
 // Note d'harmonie et choix entre plusieurs répartitions.
 import { useEffect, useState } from 'react';
 import { harmonyProposals, type DefectType, type HarmonyReport, type Proposal } from '../core/harmony';
+import { hasTints } from '../core/tints';
 import type { HarmonyStyle } from '../core/types';
 import { chooseProposal } from '../store/actions';
 import { useHarmony } from '../store/harmony';
-import { getComps, getProject, setUi, useStore } from '../store/store';
+import { getComps, getProject, getUi, setUi, useStore } from '../store/store';
 import { SegRadio } from './fields';
 import { DEFECT_COLORS, WallSvg } from './WallSvg';
 
@@ -22,6 +23,7 @@ const STYLES: { value: HarmonyStyle; label: string; hint: string }[] = [
   { value: 'natural', label: 'Naturel', hint: 'Un mélange homogène, sans voisins identiques, alignements ni taches. Les échanges restent dans chaque pan.' },
   { value: 'waves', label: 'Vagues de couleur', hint: 'Les voisins partagent une couleur, et les teintes se regroupent en vagues irrégulières.' },
   { value: 'gradient', label: 'Dégradé', hint: 'Les motifs suivent la chaîne de leurs couleurs, du plus sombre au plus clair, d\'un bout à l\'autre. Chaque proposition prend un sens différent.' },
+  { value: 'tints', label: 'Mes teintes', hint: 'Les motifs suivent les repères de couleur posés dans la Vue d\'ensemble, onglet Teintes.' },
 ];
 
 function DefectList({ report }: { report: HarmonyReport }) {
@@ -66,12 +68,14 @@ function ProposalCard({ index, proposal }: { index: number; proposal: Proposal }
 
 export function HarmonyDialog() {
   const current = useHarmony();
-  const [style, setStyle] = useState<HarmonyStyle>(() => getProject().style ?? 'natural');
+  const [style, setStyle] = useState<HarmonyStyle>(() => getUi().harmonyStyle ?? getProject().style ?? 'natural');
+  const project = useStore(s => s.project);
+  const noTints = style === 'tints' && !hasTints(project);
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
-  const close = () => setUi({ harmonyOpen: false });
+  const close = () => setUi({ harmonyOpen: false, harmonyStyle: null });
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setUi({ harmonyOpen: false }); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setUi({ harmonyOpen: false, harmonyStyle: null }); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
@@ -79,9 +83,10 @@ export function HarmonyDialog() {
   // Laisse la fenêtre s'afficher avant le calcul.
   useEffect(() => {
     setProposals(null);
+    if (noTints) return undefined;
     const timer = setTimeout(() => setProposals(harmonyProposals(getProject(), getComps(), style)), 30);
     return () => clearTimeout(timer);
-  }, [style]);
+  }, [style, noTints]);
 
   const colorful = style !== 'natural';
   return (
@@ -97,7 +102,13 @@ export function HarmonyDialog() {
           {colorful ? ' (la part de chaque pan, oui)' : ''}, et les carreaux peints ou échangés à la main restent en place.
           {colorful && ' Les couleurs de chaque motif se règlent dans Carreaux & motifs.'}
         </p>
-        {!proposals && <p role="status">Recherche en cours…</p>}
+        {noTints && (
+          <p className="hint">
+            Aucun repère de teinte pour l'instant.{' '}
+            <button onClick={() => setUi({ harmonyOpen: false, harmonyStyle: null, tab: 'overview', overviewMode: 'tints' })}>Placer des teintes</button>
+          </p>
+        )}
+        {!proposals && !noTints && <p role="status">Recherche en cours…</p>}
         {proposals && (
           <>
             <div className="proposals">{proposals.map((p, i) => <ProposalCard key={`${style}${i}`} index={i} proposal={p} />)}</div>

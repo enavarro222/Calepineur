@@ -27,14 +27,54 @@ export function shuffle(keepLocked: boolean): void {
   if (style) showToast(`Nouvelle répartition, style « ${STYLE_NAMES[style]} » conservé.`);
 }
 
-const STYLE_NAMES: Record<HarmonyStyle, string> = { natural: 'Naturel', waves: 'Vagues de couleur', gradient: 'Dégradé' };
+const STYLE_NAMES: Record<HarmonyStyle, string> = { natural: 'Naturel', waves: 'Vagues de couleur', gradient: 'Dégradé', tints: 'Mes teintes' };
+
+// ---- Mes teintes : repères de couleur posés sur les pans ----
+const DEFAULT_SHARPNESS = 0.3;
+
+export function addTint(wall: string, x: number, y: number, color: string): void {
+  commit(p => {
+    p.tints ??= { spots: [], sharpness: DEFAULT_SHARPNESS };
+    p.tints.spots.push({ wall, x: round1(x), y: round1(y), color });
+  });
+}
+
+// Un glissement ne fait qu'une étape d'annulation.
+export function moveTint(i: number, wall: string, x: number, y: number): void {
+  commit(p => {
+    const s = p.tints?.spots[i];
+    if (s) Object.assign(s, { wall, x: round1(x), y: round1(y) });
+  }, { coalesce: `tint.${i}` });
+}
+
+export function recolorTint(i: number, color: string): void {
+  commit(p => {
+    const s = p.tints?.spots[i];
+    if (s) s.color = color;
+  });
+}
+
+export function removeTint(i: number): void {
+  commit(p => { p.tints?.spots.splice(i, 1); });
+}
+
+export function setTintSharpness(v: number): void {
+  commit(p => {
+    p.tints ??= { spots: [], sharpness: DEFAULT_SHARPNESS };
+    p.tints.sharpness = v;
+  }, { coalesce: 'tint.sharpness' });
+}
+
+export function clearTints(): void {
+  commit(p => { delete p.tints; });
+}
 
 export function chooseProposal(assignment: Assignment, style: HarmonyStyle, variant = 0): void {
   commit(p => {
     applyAssignment(p, assignment);
     applyStyle(p, style, variant);
   });
-  setUi({ harmonyOpen: false });
+  setUi({ harmonyOpen: false, harmonyStyle: null });
   showToast('Répartition appliquée. Les quantités à commander ne changent pas.');
 }
 

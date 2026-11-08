@@ -32,6 +32,16 @@ describe('parseProject', () => {
     expect(parseProject({ ...raw, styleVariant: 1.5 }).styleVariant).toBeUndefined();
   });
 
+  it('garde les repères de teinte', () => {
+    const tints = { spots: [{ wall: 'w1', x: 10, y: 20.5, color: '#112233' }], sharpness: 0.7 };
+    const raw = JSON.parse(JSON.stringify(project({ style: 'tints', tints })));
+    const p = parseProject(raw);
+    expect(p.tints).toEqual(tints);
+    expect(p.style).toBe('tints');
+    expect(parseProject({ ...raw, tints: { spots: [] } }).tints).toEqual({ spots: [], sharpness: 0.3 });
+    expect(() => parseProject({ ...raw, tints: { spots: [{ wall: 'w1', x: 0, y: 0, color: 'rouge' }] } })).toThrow(/#rrggbb/);
+  });
+
   it('relit un projet sans le changer', () => {
     const p = demoProject();
     expect(parseProject(JSON.parse(JSON.stringify(p)))).toEqual(p);

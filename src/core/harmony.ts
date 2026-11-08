@@ -6,15 +6,17 @@
 // identiques ou alterner clair et sombre mène à un pavage périodique, qui saute aux yeux. Rien ne récompense donc la
 // régularité : une fois les défauts évités, la recherche continue au hasard parmi les solutions sans défaut.
 //
-// Les styles « vagues » et « dégradé » ajoutent un seul terme, qui n'est pas un défaut : chaque motif est attiré vers
-// une zone selon sa place dans la chaîne des couleurs. La zone visée est une cible lisse (ondulations ou pente)
-// ramenée en rangs, pour que chaque motif y trouve exactement sa part. Les échanges se font alors entre pans : le
-// total commandé ne change pas, la part de chaque pan oui.
+// Les styles de couleur ajoutent un seul terme, qui n'est pas un défaut : le placement, ce que coûte chaque motif à
+// chaque carreau. Pour les vagues et le dégradé, chaque motif est attiré vers une zone selon sa place dans la chaîne
+// des couleurs ; la zone visée est une cible lisse (ondulations ou pente) ramenée en rangs, pour que chaque motif y
+// trouve exactement sa part. Pour « Mes teintes », chaque motif est attiré par les repères qui ont ses couleurs (voir
+// tints.ts). Les échanges se font alors entre pans : le total commandé ne change pas, la part de chaque pan oui.
 import { produce } from 'immer';
 import type { WallComp } from './compute';
 import { hashStr, mulberry32 } from './geom';
 import { colorChain } from './palette';
 import { buildModel, DEFECT_POINTS, findDefects, localPoints, type Cell, type DefectType, type Model } from './rules';
+import { tintFit, wallStarts } from './tints';
 import type { HarmonyStyle, Project } from './types';
 
 export { colorTone, defectsOnWall, type Defect, type DefectType, type TileRef, type WallDefect } from './rules';
@@ -32,6 +34,8 @@ const PROPOSALS = 4;
 // Écart d'un carreau à sa zone, au carré (rangs de 0 à 1). Assez fort pour que le dégradé suive les couleurs, assez
 // faible pour qu'un voisin identique coûte toujours plus qu'un carreau mal placé.
 const PLACEMENT_POINTS = 2;
+// Part des couleurs d'un motif que les repères ne demandent pas, de 0 à 1.
+const TINT_POINTS = 2;
 const WAVES = 6;
 const FULL_RING1 = 6;
 const FINISH_TRIES = 60;
@@ -78,7 +82,7 @@ const GRADIENT_DIRECTIONS = [
 
 // Cible lisse, ramenée en rangs de 0 à 1 : chaque motif y trouve une bande à la mesure de sa quantité.
 function styleTarget(m: Model, style: HarmonyStyle, k: number, seed: string): number[] | null {
-  if (style === 'natural' || !m.cells.length) return null;
+  if ((style !== 'waves' && style !== 'gradient') || !m.cells.length) return null;
   const rng = mulberry32(hashStr(`${seed}:cible`));
   const ys = m.cells.map(c => c.c[1]);
   const span = Math.max(1, Math.max(...m.cells.map(c => c.gx)) - Math.min(...m.cells.map(c => c.gx)), Math.max(...ys) - Math.min(...ys));
@@ -100,14 +104,32 @@ function styleTarget(m: Model, style: HarmonyStyle, k: number, seed: string): nu
   return target;
 }
 
-// ---- recherche par échanges ----
-
+// Placement : ce que coûte chaque motif à chaque carreau (cost[i * n + motif]), ou rien en style Naturel.
 interface Goal {
-  target: number[] | null;
-  rank: number[];
+  cost: Float64Array | null;
+  n: number;
 }
 
-const placement = (g: Goal, d: number[], i: number): number => (g.target ? PLACEMENT_POINTS * (g.rank[d[i]!]! - g.target[i]!) ** 2 : 0);
+function styleGoal(project: Project, m: Model, style: HarmonyStyle, k: number, seed: string): Goal {
+  const n = project.designs.length;
+  const cost = new Float64Array(m.cells.length * n);
+  if (style === 'tints') {
+    const starts = wallStarts(project.walls);
+    const fit = tintFit(project, m.cells.map(c => ({ gx: starts[c.wall]! + c.c[0], y: c.c[1] })));
+    if (!fit) return { cost: null, n };
+    fit.forEach((f, i) => f.forEach((x, d) => { cost[i * n + d] = TINT_POINTS * (1 - x); }));
+    return { cost, n };
+  }
+  const target = styleTarget(m, style, k, seed);
+  if (!target) return { cost: null, n };
+  const rank = chainRanks(project, m.cells);
+  target.forEach((t, i) => rank.forEach((r, d) => { cost[i * n + d] = PLACEMENT_POINTS * (r - t) ** 2; }));
+  return { cost, n };
+}
+
+// ---- recherche par échanges ----
+
+const placement = (g: Goal, d: number[], i: number): number => (g.cost ? g.cost[i * g.n + d[i]!]! : 0);
 
 const costAround = (m: Model, g: Goal, d: number[], i: number, j: number): number =>
   localPoints(m, d, i, j) + placement(g, d, i) + placement(g, d, j);
@@ -186,7 +208,7 @@ function toAssignment(project: Project, m: Model, d: number[]): Assignment {
 export function arrange(project: Project, comps: WallComp[], style: HarmonyStyle, k: number, perWall = style === 'natural'): Assignment {
   const m = buildModel(project, comps, style);
   const seed = seedOf(project, style, k);
-  const d = search(m, seed, { target: styleTarget(m, style, k, seed), rank: chainRanks(project, m.cells) }, perWall);
+  const d = search(m, seed, styleGoal(project, m, style, k, seed), perWall);
   return toAssignment(project, m, d);
 }
 
@@ -227,11 +249,10 @@ export function harmonyProposals(project: Project, comps: WallComp[], style: Har
     return d ? d.name || d.key : '';
   };
   const ends = [name(chain[0]), name(chain[chain.length - 1])] as const;
-  const rank = chainRanks(project, m.cells);
   const proposals = Array.from({ length: count }, (_, n): Proposal => {
     const k = first + n;
     const seed = seedOf(project, style, k);
-    const d = search(m, seed, { target: styleTarget(m, style, k, seed), rank }, style === 'natural');
+    const d = search(m, seed, styleGoal(project, m, style, k, seed), style === 'natural');
     const assignment = toAssignment(project, m, d);
     const variant = style === 'gradient' ? k % GRADIENT_DIRECTIONS.length : 0;
     const next = produce(project, draft => {

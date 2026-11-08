@@ -372,6 +372,42 @@ describe('styles de couleur', () => {
   });
 });
 
+describe('Mes teintes', () => {
+  // Trois rouges et trois bleus, chacun avec une touche de beige ; un repère rouge à gauche, un bleu à droite.
+  const tinted = () => {
+    const reds = ['#b03a2e', '#c0503f', '#a0302a'];
+    const blues = ['#2e4f8f', '#3d60a0', '#28457d'];
+    const designs = [...reds, ...blues].map((c, i) => ({ ...design('ABCDEF'[i]!, c), colors: [c, '#d8d0c0'] }));
+    const zone: [number, number][] = [[-10, -10], [-10, 80], [170, 80], [170, -10]];
+    return ready({
+      designs,
+      walls: [wall({ id: 'w1', W: 160, H: 70, zone }), wall({ id: 'w2', W: 160, H: 70, ox: 8 - 160, zone })],
+      tints: { sharpness: 0.3, spots: [{ wall: 'w1', x: 30, y: 35, color: reds[0]! }, { wall: 'w2', x: 130, y: 35, color: blues[0]! }] },
+    });
+  };
+  const redShare = (x: Project, w: number, comps: ReturnType<typeof computeWalls>) =>
+    comps[w]!.tiles.filter(t => 'ABC'.includes(x.walls[w]!.tiles[t.key]!.d!)).length / comps[w]!.tiles.length;
+
+  it('rassemble chaque couleur autour de son repère, sans défaut majeur', () => {
+    const { p, comps } = tinted();
+    const before = orderCounts(p, comps);
+    const [best] = harmonyProposals(p, comps, 'tints', 1);
+    expect(redShare(best!.project, 0, comps)).toBeGreaterThan(0.65);
+    expect(redShare(best!.project, 1, comps)).toBeLessThan(0.35);
+    expect(best!.report.counts.adjacent).toBe(0);
+    const after = orderCounts(best!.project, comps);
+    for (const d of p.designs) expect(after.per[d.key]!.total).toBe(before.per[d.key]!.total);
+    expect(best!.project.style).toBe('tints');
+  });
+
+  it('se comporte comme un style de couleur sans repère', () => {
+    const { p, comps } = tinted();
+    delete p.tints;
+    const [best] = harmonyProposals(p, comps, 'tints', 1);
+    expect(best!.report.counts.adjacent).toBe(0);
+  });
+});
+
 describe('angle entre deux pans', () => {
   // Deux pans de 60 cm raccordés : la grille continue à travers l'angle. Le second peut partir `dy` cm plus haut.
   const corner = (joinPrev?: boolean, dy = 0) => {
